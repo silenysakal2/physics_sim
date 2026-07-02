@@ -62,7 +62,8 @@ struct Object
 		Vec2 normal, // Should point towards this object; does NOT have to be a unit vector (it's faster than doing square roots)
 		Vec2 comfv, // Velocity of the center-of-mass frame
 		float depth, // How deep the object was in the other collider. Has to be scaled according to the normal vector's length: when you multiply them, that must produce the actual shift
-		Vec2 relative_acc // Relative acceleration
+		Vec2 relative_acc, // Relative acceleration
+		float time_ratio = 0.5 // How much of a tick has passed *before* the bounce has happened
 	);
 };
 

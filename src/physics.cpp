@@ -72,7 +72,8 @@ inline void Object::bounce(
 	Vec2 normal, // Should point towards this object; does NOT have to be a unit vector (it's faster than doing square roots)
 	Vec2 comfv, // Velocity of the center-of-mass frame
 	float depth, // How deep the object was in the other collider. Has to be scaled according to the normal vector's length: it should be as larger than the actual shift as is the length of the normal vector
-	Vec2 rel_acc // Relative acceleration
+	Vec2 rel_acc, // Relative acceleration
+	float time_ratio // How much of a tick has passed *before* the bounce has happened
 )
 {
 	Vec2 tangent = {normal.y, -normal.x};
@@ -81,15 +82,6 @@ inline void Object::bounce(
 	float vel_tangent = (this->vel - comfv) * tangent;
 	float acc_normal = rel_acc * normal;
 	//float acc_tangent = rel_acc * tangent_inv_scaled; // This actually gets never used
-
-	float time_ratio = 0.5; // How much of a tick has passed *after* the bounce has happened
-	constexpr int ITERATION_COUNT = 2;
-	for(int it_i = 0; it_i < ITERATION_COUNT; it_i++) { // An approximation of when within the tick has the bounce occured, without needing a sqrt
-		float avg_vel = (0.5*time_ratio * acc_normal) - vel_normal; // Estimated average velocity after bouncing; based on the previous bounce time ratio
-		time_ratio = depth / avg_vel;
-	}
-	if(time_ratio < 0) time_ratio = 0;
-	if(time_ratio > 1) time_ratio = 1;
 
 	float normal_len_sq = normal * normal; // Here we deal with non-unit normal vectors without actually needing sqrt
 	Vec2 normal_inv_scaled = (1 / normal_len_sq) * normal;
@@ -105,13 +97,27 @@ inline void Object::collision(Object *other)
 	Vec2 rel = other->pos - this->pos;
 	float dist_sq = rel * rel;
 	float max_dist_sq = (this->hitbox.r + other->hitbox.r) * (this->hitbox.r + other->hitbox.r);
+
 	if(dist_sq < max_dist_sq) {
 		float inv_mass_sum = 1 / (this->mass + other->mass);
 		Vec2 comfv = ((this->vel * this->mass) + (other->vel * other->mass)) * inv_mass_sum;
 		float depth = 0.5 * (max_dist_sq - dist_sq);
-		// TODO: Am I calculating depth correctly?
-		this ->bounce(-rel, comfv, depth * other->mass * inv_mass_sum, {this ->acc - other->acc});
-		other->bounce( rel, comfv, depth * this ->mass * inv_mass_sum, {other->acc - this ->acc});
+		// TODO: Am I approximating depth correctly?
+
+		Vec2 normal = rel;
+		float vel_normal = (other->vel - this->vel) * normal;
+		float acc_normal = (other->acc - this->acc) * normal;
+		float time_ratio = 0.5;
+		constexpr int ITERATION_COUNT = 2;
+		for(int it_i = 0; it_i < ITERATION_COUNT; it_i++) { // An approximation of when within the tick has the bounce occured, without needing a sqrt
+			float avg_vel = vel_normal - (0.5*time_ratio * acc_normal); // Estimated average velocity after bouncing; based on the previous bounce time ratio
+			time_ratio = depth / avg_vel;
+		}
+		if(time_ratio < 0) time_ratio = 0;
+		if(time_ratio > 1) time_ratio = 1;
+
+		this ->bounce(-rel, comfv, depth * other->mass * inv_mass_sum, {this ->acc - other->acc}, time_ratio);
+		other->bounce( rel, comfv, depth * this ->mass * inv_mass_sum, {other->acc - this ->acc}, time_ratio);
 	}
 }
 

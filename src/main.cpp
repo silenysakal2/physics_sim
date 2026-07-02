@@ -179,10 +179,12 @@ int main(int argc, char** argv)
 		);
 
 	Scene my_scene;
+	Scene my_scene2;
 	for(int xi = 0; xi < 15; xi++)
 		for(int yi = 0; yi < 5; yi++) {
 			Object my_obj({(float) (1 + xi), (float) (1 + yi)}, 0.4);
 			my_scene.push_object(my_obj);
+			my_scene2.push_object(my_obj);
 		}
 	Object my_object({5, 4}, 1);
 	Object my_object2({5, 4}, 1);
@@ -203,8 +205,9 @@ int main(int argc, char** argv)
 
 		clear_surface(framebuffer, 0xff'00'00'00);
 
-		if(!(frame_i % 1))
-			my_scene.tick({0, 0.0005});
+		if(!(frame_i % 4))
+			my_scene2.tick({0, 0.0005 * 16});
+		my_scene.tick({0, 0.0005});
 		frame_i++;
 
 		uint64_t time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -220,6 +223,9 @@ int main(int argc, char** argv)
 		//draw_object(framebuffer, my_object, 0xff'00'00'ff);
 		for(int i = 0; i < my_scene.objects.size(); i++) {
 			draw_object(framebuffer, my_scene.objects[i], 0xff'ff'ff'ff);
+		}
+		for(int i = 0; i < my_scene.objects.size(); i++) {
+			draw_object(framebuffer, my_scene2.objects[i], 0xff'00'00'ff);
 		}
 
 		SDL_UpdateTexture(
