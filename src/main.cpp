@@ -51,7 +51,7 @@ void draw_circle(SDL_Surface* target, int cx, int cy, int r, uint32_t color)
 
 void draw_object(SDL_Surface* target, const Object& object, uint32_t color)
 {
-	draw_circle(target, (object.pos.x + object.hitbox.c.x) * SCALE, (object.pos.y + object.hitbox.c.y) * SCALE, object.hitbox.r * SCALE, color);
+	draw_circle(target, (object.pos.x + (object.cos * object.hitbox.c.x) - (object.sin * object.hitbox.c.y)) * SCALE, (object.pos.y + (object.sin * object.hitbox.c.x) + (object.cos * object.hitbox.c.y)) * SCALE, object.hitbox.r * SCALE, color);
 }
 
 static void drawLine(SDL_Surface* surface,
@@ -179,15 +179,19 @@ int main(int argc, char** argv)
 		);
 
 	Scene my_scene;
-	Scene my_scene2;
-	for(int xi = 0; xi < 15; xi++)
+	//Scene my_scene2;
+	/*for(int xi = 0; xi < 1; xi++)
 		for(int yi = 0; yi < 5; yi++) {
 			Object my_obj({(float) (1 + xi), (float) (1 + yi)}, 0.4);
 			my_scene.push_object(my_obj);
 			my_scene2.push_object(my_obj);
-		}
-	Object my_object({5, 4}, 1);
-	Object my_object2({5, 4}, 1);
+		}*/
+	Object my_obj({5, 4}, {0, 0.05}, 0, 1);
+	Object my_obj2({7, 6.5}, {0, -0.05}, M_PI, 1);
+	my_scene.push_object(my_obj);
+	my_scene.push_object(my_obj2);
+	//Object my_object({5, 4}, 1);
+	//Object my_object2({5, 4}, 1);
 
 	bool running = true;
 	//uint64_t TIME_STEP = 100'000;
@@ -206,7 +210,7 @@ int main(int argc, char** argv)
 		clear_surface(framebuffer, 0xff'00'00'00);
 
 		if(!(frame_i % 4))
-			my_scene2.tick({0, 0.0005 * 16});
+			//my_scene2.tick({0, 0.0005 * 16});
 		my_scene.tick({0, 0.0005});
 		frame_i++;
 
@@ -222,10 +226,11 @@ int main(int argc, char** argv)
 		//draw_object(framebuffer, my_object2, 0xff'ff'ff'ff);
 		//draw_object(framebuffer, my_object, 0xff'00'00'ff);
 		for(int i = 0; i < my_scene.objects.size(); i++) {
-			draw_object(framebuffer, my_scene.objects[i], 0xff'ff'ff'ff);
+			draw_object(framebuffer, my_scene.objects[i], 0xff'aa'aa'aa);
+			draw_circle(framebuffer, my_scene.objects[i].pos.x * SCALE, my_scene.objects[i].pos.y * SCALE, 4, 0xff'ff'ff'ff);
 		}
 		for(int i = 0; i < my_scene.objects.size(); i++) {
-			draw_object(framebuffer, my_scene2.objects[i], 0xff'00'00'ff);
+			//draw_object(framebuffer, my_scene2.objects[i], 0xff'00'00'ff);
 		}
 
 		SDL_UpdateTexture(

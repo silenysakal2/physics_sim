@@ -16,6 +16,7 @@ struct Vec2
     inline Vec2 operator-(const Vec2 other) const;
     inline float operator*(const Vec2 other) const;
     inline Vec2 operator*(const float mul) const;
+    inline Vec2 operator/(const float div) const;
 };
 inline Vec2 operator*(const float mul, Vec2 vec);
 
@@ -49,12 +50,13 @@ struct Object
 	float angle;
 	float ang_vel;
 	float ang_acc; // The same as `acc`
+	float sin, cos; // Of the angle
 
 	CircleHitbox hitbox;
 	float mass;
 	float moment_of_inertia;
 
-	Object(Vec2 pos, float r);
+	Object(Vec2 pos, Vec2 vel, float angle, float r);
 
 	void update(Vec2 acc);
 	inline void collision(Object *other);
@@ -64,6 +66,11 @@ struct Object
 		float depth, // How deep the object was in the other collider. Has to be scaled according to the normal vector's length: when you multiply them, that must produce the actual shift
 		Vec2 relative_acc, // Relative acceleration
 		float time_ratio = 0.5 // How much of a tick has passed *before* the bounce has happened
+	);
+	inline void nudge(
+		Vec2 impulse,
+		Vec2 rel, // The point at which it was hit, relative to its pos (=COM)
+		float time_ratio = 0.5
 	);
 };
 
