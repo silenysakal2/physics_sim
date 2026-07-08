@@ -52,9 +52,9 @@ Object::Object(Vec2 pos, Vec2 vel, float angle, float r)
 	this->angle = angle;
 	this->ang_vel = 0;
 	this->ang_acc = 0; // TODO: Remove this when adding angular acceleration
+	this->mass_inv = 1 / (r * r);
+	this->moi_inv = 1;
 	this->hitbox = {{1, 0}, r};
-	this->mass = r * r;
-	this->moment_of_inertia = 1;
 }
 
 
@@ -115,10 +115,10 @@ inline void Object::nudge(
 	float time_ratio
 )
 {
-	this->vel += impulse / this->mass;
-	this->pos += impulse / this->mass * (2*time_ratio);
-	this->ang_vel += ((Vec2) {-rel.y, rel.x}) * impulse / this->moment_of_inertia;
-	this->angle += ((Vec2) {-rel.y, rel.x}) * impulse / this->moment_of_inertia * (2*time_ratio);
+	this->vel += impulse * this->mass_inv;
+	this->pos += impulse * this->mass_inv * (2*time_ratio);
+	this->ang_vel += ((Vec2) {-rel.y, rel.x}) * impulse * this->moi_inv;
+	this->angle += ((Vec2) {-rel.y, rel.x}) * impulse * this->moi_inv * (2*time_ratio);
 }
 
 
@@ -131,8 +131,6 @@ inline void Object::collision(Object *other)
 	float max_dist_sq = (this->hitbox.r + other->hitbox.r) * (this->hitbox.r + other->hitbox.r);
 
 	if(dist_sq < max_dist_sq) {
-		float inv_mass_sum = 1 / (this->mass + other->mass);
-		Vec2 comfv = ((this->vel * this->mass) + (other->vel * other->mass)) * inv_mass_sum;
 		float depth = 0.5 * (max_dist_sq - dist_sq);
 
 		// Calculate relative hit positions
@@ -161,14 +159,13 @@ inline void Object::collision(Object *other)
 
 		// Effective mass: if you only care about the surroundings of the hit, you can make the object act as if its COM lied along the normal vector
 		// TODO: Add friction
-		// TODO: Make the onject store inverse mass and moment of inertia to make this 3x less division-intensive
 		float eff_mass_a = 1 / (
-			(1 / this->mass) +
-			(1 / this->moment_of_inertia * (normal * hit_a_rot) * (normal * hit_a_rot) * normal_sq_inv)
+			this->mass_inv +
+			(this->moi_inv * (normal * hit_a_rot) * (normal * hit_a_rot) * normal_sq_inv)
 		);
 		float eff_mass_b = 1 / (
-			(1 / this->mass) +
-			(1 / this->moment_of_inertia * (normal * hit_b_rot) * (normal * hit_b_rot) * normal_sq_inv)
+			other->mass_inv +
+			(other->moi_inv * (normal * hit_b_rot) * (normal * hit_b_rot) * normal_sq_inv)
 		);
 		std::cout << "Eff masses: " << eff_mass_a << ' ' << eff_mass_b << '\n';
 		// TODO: Make relative velocity more precise at this point in time

@@ -41,8 +41,12 @@ struct Object
 {
 	uint32_t flags;
 	/*
-	Bits 0--15: Something in the future (like gluing objects to scene)
-	Bits 16--31: Collision layers (not yet implemented)
+	Bits 0--7: Reserved for memory ownership stuff in the future
+	Bits 8--11: Order-of-magnitude mass
+	Bit 12: No *positional* acceleration
+	Bit 13: No angular acceleration
+	Bits 14 and 15: idk
+	Bits 16--31: Collision layers
 	*/
 	Vec2 pos;
 	Vec2 vel;
@@ -52,9 +56,10 @@ struct Object
 	float ang_acc; // The same as `acc`
 	float sin, cos; // Of the angle
 
+	float mass_inv; // 1 / mass
+	float moi_inv; // 1 / moment of inertia
+
 	CircleHitbox hitbox;
-	float mass;
-	float moment_of_inertia;
 
 	Object(Vec2 pos, Vec2 vel, float angle, float r);
 
