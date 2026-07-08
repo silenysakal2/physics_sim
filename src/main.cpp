@@ -37,13 +37,13 @@ static void clear_surface(SDL_Surface* surface, uint32_t color)
 		pixels[i] = color;
 }
 
-void draw_circle(SDL_Surface* target, int cx, int cy, int r, uint32_t color)
+void draw_circle(SDL_Surface* target, float cx, float cy, float r, uint32_t color)
 {
-	int r_sq = r * r + r;
-	int r_in_sq = (r-4) * (r-4) + r-4;
-	for(int x = std::max(0, cx - r); x < std::min(target->w, cx + r + 1); x++)
-		for(int y = std::max(0, cy - r); y < std::min(target->h, cy + r + 1); y++) {
-			int len_sq = ((y-cy) * (y-cy)) + ((x-cx) * (x-cx));
+	float r_sq = r * r;
+	float r_in_sq = (r-4) * (r-4);
+	for(int x = std::max(0, (int) (cx - r - 1)); x < std::min(target->w, (int) (cx + r + 2)); x++)
+		for(int y = std::max(0, (int) (cy - r - 1)); y < std::min(target->h, (int) (cy + r + 2)); y++) {
+			float len_sq = ((y-cy) * (y-cy)) + ((x-cx) * (x-cx));
 			if((len_sq < r_sq) && (len_sq >= r_in_sq))
 				((uint32_t*) target->pixels)[target->w * y + x] = color;
 		}
@@ -226,8 +226,8 @@ int main(int argc, char** argv)
 		//draw_object(framebuffer, my_object2, 0xff'ff'ff'ff);
 		//draw_object(framebuffer, my_object, 0xff'00'00'ff);
 		for(int i = 0; i < my_scene.objects.size(); i++) {
-			draw_object(framebuffer, my_scene.objects[i], 0xff'aa'aa'aa);
-			draw_circle(framebuffer, my_scene.objects[i].pos.x * SCALE, my_scene.objects[i].pos.y * SCALE, 4, 0xff'ff'ff'ff);
+			draw_object(framebuffer, my_scene.objects[i], 0xff'55'55'55);
+			draw_circle(framebuffer, my_scene.objects[i].pos.x * SCALE, my_scene.objects[i].pos.y * SCALE, 8, 0xff'ff'ff'ff);
 		}
 		for(int i = 0; i < my_scene.objects.size(); i++) {
 			//draw_object(framebuffer, my_scene2.objects[i], 0xff'00'00'ff);
