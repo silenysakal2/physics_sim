@@ -91,8 +91,8 @@ inline void Object::nudge(
 
 inline bool collision(Object *a, Object *b, CircleHitbox *ha, CircleHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *time_ratio)
 {
-	Vec2 ca = {(a->cos * ha->c.x) - (a->sin * ha->c.y), (a->sin * ha->c.x) + (a->cos * ha->c.y)};
-	Vec2 cb = {(b->cos * hb->c.x) - (b->sin * hb->c.y), (b->sin * hb->c.x) + (b->cos * hb->c.y)};
+	Vec2 ca = ha->c.rotate(a->sin, a->cos);
+	Vec2 cb = hb->c.rotate(b->sin, b->cos);
 	Vec2 rel = (b->pos + cb) - (a->pos + ca);
 	float dist_sq = rel * rel;
 	float max_dist_sq = (ha->r + hb->r) * (ha->r + hb->r);
@@ -104,8 +104,8 @@ inline bool collision(Object *a, Object *b, CircleHitbox *ha, CircleHitbox *hb, 
 		constexpr int ITERATION_COUNT = 2;
 		for(int it_i = 0; it_i < ITERATION_COUNT; it_i++) { // An approximation of when within the tick the bounce occured
 			// Recalculate the relative circle positions according to the time_ratio
-			ca = {((a->cos+(*time_ratio*a->ang_vel*a->sin)) * ha->c.x) - ((a->sin-(*time_ratio*a->ang_vel*a->cos)) * ha->c.y), ((a->sin-(*time_ratio*a->ang_vel*a->cos)) * ha->c.x) + ((a->cos+(*time_ratio*a->ang_vel*a->sin)) * ha->c.y)}; // Please predend you don't see the duplicate code on this line
-			cb = {((b->cos+(*time_ratio*a->ang_vel*b->sin)) * hb->c.x) - ((b->sin-(*time_ratio*a->ang_vel*b->cos)) * hb->c.y), ((b->sin-(*time_ratio*a->ang_vel*b->cos)) * hb->c.x) + ((b->cos+(*time_ratio*a->ang_vel*b->sin)) * hb->c.y)};
+			ca = ha->c.rotate(a->sin, a->cos) + (*time_ratio * a->ang_vel * ha->c.rotate(-a->cos, a->sin));
+			cb = hb->c.rotate(b->sin, b->cos) + (*time_ratio * b->ang_vel * hb->c.rotate(-b->cos, b->sin));
 			rel = (b->pos + cb) - (a->pos + ca) - (*time_ratio * (rel_vel - (*time_ratio*0.5*rel_acc)));
 			dist_sq = rel * rel;
 			float depth = 0.5 * (max_dist_sq - dist_sq); // How deep into each other the objects were, at the estimated time ratio; it should be about as much longer than the actual depth as the normal vector

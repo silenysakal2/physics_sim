@@ -26,6 +26,9 @@ struct Vec2
 		*this = *this * mul;}
 	inline Vec2 operator/(const float div) const {
 		return {this->x / div, this->y / div};}
+
+	inline Vec2 rotate(float sin, float cos) const {
+		return {(cos * this->x) - (sin * this->y), (sin * this->x) + (cos * this->y)};}
 };
 inline Vec2 operator*(const float mul, Vec2 vec) {
 	return {mul * vec.x, mul * vec.y};}
