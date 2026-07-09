@@ -7,13 +7,15 @@
 
 
 
-Object::Object(Vec2 pos, Vec2 vel, float angle, float r)
+Object::Object(Vec2 pos, Vec2 vel, float angle, float r, uint32_t flags)
 {
+	this->flags = flags;
 	this->pos = pos;
 	this->vel = vel;
+	this->acc = {0, 0};
 	this->angle = angle;
 	this->ang_vel = 0;
-	this->ang_acc = 0; // TODO: Remove this when adding angular acceleration
+	this->ang_acc = 0;
 	this->mass_inv = 1 / (r * r);
 	this->moi_inv = 1;
 	this->restitution = 0.95;
@@ -26,19 +28,16 @@ Object::Object(Vec2 pos, Vec2 vel, float angle, float r)
 }
 
 
-void Object::update(Vec2 acc)
+void Object::update()
 {
-	this->pos += this->vel + (0.5*acc);
+	this->pos += this->vel + (0.5*this->acc);
 	this->vel += acc;
-	this->acc = acc;
 
 	this->angle += this->ang_vel + (0.5*this->ang_acc);
 	this->ang_vel += this->ang_acc;
-	// TODO: Stuff with (nonzero) angular acceleration applied
 	sincosf(this->angle, &this->sin, &this->cos);
-	this->sin = std::sin(this->angle);
-	this->cos = std::cos(this->angle);
 
+	// Hard-coded boundaries [TODO: remove when possible]
 	if(this->pos.x < this->hitbox.circles[0].r)
 		bounce({1, 0}, {0, 0}, this->hitbox.circles[0].r - this->pos.x, this->acc);
 	if(this->pos.x > (16 - this->hitbox.circles[0].r))
@@ -60,6 +59,7 @@ inline void Object::bounce(
 	float time_ratio // How much of a tick has passed *before* the bounce has happened
 )
 {
+	// TODO: Remove this function when possible
 	Vec2 tangent = {normal.y, -normal.x};
 
 	float vel_normal = (this->vel - comfv) * normal; // Made to be *compatible* with `depth` in terms of scaling
@@ -73,7 +73,6 @@ inline void Object::bounce(
 
 	this->pos += (depth - (time_ratio * (vel_normal - (time_ratio * acc_normal)))) * normal_inv_scaled;
 	this->vel = (vel_tangent * tangent_inv_scaled) - (0.95 * normal_inv_scaled * (vel_normal - (2*time_ratio * acc_normal))) + comfv;
-	// TODO: Fix restitution
 }
 
 
@@ -138,41 +137,50 @@ inline bool collision(Object *a, Object *b, CircleHitbox *ha, CircleHitbox *hb, 
 
 inline void collision(Object *a, Object *b)
 {
-	float time_ratio;
-	Vec2 hit_a, hit_b;
-	Vec2 normal;
-	float hit_vel_normal;
-	for(size_t ai = 0; ai < a->hitbox.circle_count; ai++)
-		for(size_t bi = 0; bi < b->hitbox.circle_count; bi++)
-			if(collision(a, b, a->hitbox.circles + ai, b->hitbox.circles + bi, &hit_a, &hit_b, &normal, &hit_vel_normal, &time_ratio)) {
-				// TODO: Add friction
+	if(a->flags & b->flags & COLLISION_LAYERS_BIT) {
+		float time_ratio;
+		Vec2 hit_a, hit_b;
+		Vec2 normal;
+		float hit_vel_normal;
+		for(size_t ai = 0; ai < a->hitbox.circle_count; ai++)
+			for(size_t bi = 0; bi < b->hitbox.circle_count; bi++)
+				if(collision(a, b, a->hitbox.circles + ai, b->hitbox.circles + bi, &hit_a, &hit_b, &normal, &hit_vel_normal, &time_ratio)) {
+					// TODO: Add friction
 
-				// Effective mass: if you only care about the surroundings of the hit, you can make the object act as if its COM lied along the normal vector
-				Vec2 hit_a_rot = {-hit_a.y, hit_a.x};
-				Vec2 hit_b_rot = {-hit_b.y, hit_b.x};
-				float normal_sq_inv = 1 / (normal * normal); // This should get compiled away with inlining
+					// Effective mass: if you only care about the surroundings of the hit, you can make the object act as if its COM lied along the normal vector
+					Vec2 hit_a_rot = {-hit_a.y, hit_a.x};
+					Vec2 hit_b_rot = {-hit_b.y, hit_b.x};
+					float normal_sq_inv = 1 / (normal * normal); // This should get compiled away with inlining
 
-				float eff_mass_a = 1 / (
-					a->mass_inv +
-					(a->moi_inv * (normal * hit_a_rot) * (normal * hit_a_rot) * normal_sq_inv)
-				);
-				float eff_mass_b = 1 / (
-					b->mass_inv +
-					(b->moi_inv * (normal * hit_b_rot) * (normal * hit_b_rot) * normal_sq_inv)
-				);
+					float eff_mass_a = 1 / (
+						a->mass_inv +
+						(a->moi_inv * (normal * hit_a_rot) * (normal * hit_a_rot) * normal_sq_inv)
+					);
+					float eff_mass_b = 1 / (
+						b->mass_inv +
+						(b->moi_inv * (normal * hit_b_rot) * (normal * hit_b_rot) * normal_sq_inv)
+					);
 
-				Vec2 impulse = 2 * eff_mass_a * eff_mass_b / (eff_mass_a + eff_mass_b) * normal_sq_inv * hit_vel_normal * normal;
-				impulse *= a->restitution * b->restitution;
-				a->nudge( impulse, hit_a, time_ratio);
-				b->nudge(-impulse, hit_b, time_ratio);
-			}
+					Vec2 impulse = 2 * eff_mass_a * eff_mass_b / (eff_mass_a + eff_mass_b) * normal_sq_inv * hit_vel_normal * normal;
+					impulse *= a->restitution * b->restitution;
+					a->nudge( impulse, hit_a, time_ratio);
+					b->nudge(-impulse, hit_b, time_ratio);
+				}
+	}
 }
 
 
-void Scene::tick(Vec2 acc)
+Scene::Scene(float dt, Vec2 gravity)
+{
+	this->dt = dt;
+	this->gravity = gravity * (dt * dt);
+}
+
+
+void Scene::tick()
 {
 	for(size_t i = 0; i < this->objects.size(); i++)
-		this->objects[i].update(acc);
+		this->objects[i].update();
 	for(size_t a = 0; a < this->objects.size(); a++)
 		for(size_t b = 0; b < a; b++)
 			collision(&this->objects[a], &this->objects[b]);
@@ -181,4 +189,11 @@ void Scene::tick(Vec2 acc)
 void Scene::push_object(const Object& object)
 {
 	this->objects.push_back(object);
+	Object& obj = this->objects[this->objects.size()-1];
+	obj.vel *= this->dt;
+	obj.acc *= this->dt * this->dt;
+	if(!(obj.flags & NO_GRAVITY_BIT))
+		obj.acc += this->gravity;
+	obj.ang_vel *= this->dt;
+	obj.ang_acc *= this->dt * this->dt;
 }

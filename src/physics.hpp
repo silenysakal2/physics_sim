@@ -55,20 +55,21 @@ struct Hitbox
 	PolygonHitbox *polygons;
 };
 
+const uint32_t NO_GRAVITY_BIT = 0x00'00'10'00;
+const uint32_t COLLISION_LAYERS_BIT = 0xff'ff'00'00;
 struct Object
 {
 	uint32_t flags;
-	/* TODO: Implement the flags
-	Bits 0--7: Reserved for memory ownership stuff in the future
-	Bits 8--11: Order-of-magnitude mass
-	Bit 12: No *positional* acceleration
-	Bit 13: No angular acceleration
-	Bits 14 and 15: idk
+	/*
+	Bits 0--7: Reserved for memory ownership stuff in the future [TODO]
+	Bits 8--11: Order-of-magnitude mass [TODO]
+	Bit 12: No gravity acceleration
+	Bits 13--15: idk
 	Bits 16--31: Collision layers
 	*/
 	Vec2 pos;
 	Vec2 vel;
-	Vec2 acc; // Meant to save the acceleration applied at the last update(), to be used for bouncing later
+	Vec2 acc; // Here, you set the desired acceleration; it's then used for sub-tick collisions
 	float angle;
 	float ang_vel;
 	float ang_acc; // The same as `acc`
@@ -80,9 +81,9 @@ struct Object
 
 	Hitbox hitbox;
 
-	Object(Vec2 pos, Vec2 vel, float angle, float r);
+	Object(Vec2 pos, Vec2 vel, float angle, float r, uint32_t flags = COLLISION_LAYERS_BIT);
 
-	void update(Vec2 acc);
+	void update();
 	inline void bounce(
 		Vec2 normal, // Should point towards this object; does NOT have to be a unit vector (it's faster than doing square roots)
 		Vec2 comfv, // Velocity of the center-of-mass frame
@@ -102,8 +103,11 @@ inline bool collision(Object *a, Object *b, CircleHitbox *ha, CircleHitbox *hb, 
 
 struct Scene
 {
+	float dt; // The scene automatically adjusts everything for its delta time; set this to 1 if you don't want that
+	Vec2 gravity;
 	std::vector<Object> objects;
 
-	void tick(Vec2 acc);
+	Scene(float dt, Vec2 gravity);
+	void tick();
 	void push_object(const Object& object);
 };

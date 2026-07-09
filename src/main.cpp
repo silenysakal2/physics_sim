@@ -180,13 +180,12 @@ int main(int argc, char** argv)
 			SDL_PIXELFORMAT_ARGB8888
 		);
 
-	Scene my_scene;
-	Scene my_scene2;
+	Scene my_scene((float) 1. / 60, {0, 9.81});
+	Scene my_scene2((float) 1. / 15, {0, 9.81});
 	for(int xi = 0; xi < 1; xi++)
 		for(int yi = 0; yi < 2; yi++) {
-			Object my_obj({(float) (1 + 5*xi), (float) (1 + 2.5*yi)}, {(float) (yi * 0.01), (float) (xi * 0.01)}, 0, 1);
+			Object my_obj({(float) (1 + 5*xi), (float) (1 + 2.5*yi)}, {(float) yi, (float) xi}, 0, 1);
 			my_scene.push_object(my_obj);
-			my_obj.vel *= 4;
 			my_scene2.push_object(my_obj);
 		}
 	//Object my_object({5, 4}, 1);
@@ -209,8 +208,8 @@ int main(int argc, char** argv)
 		clear_surface(framebuffer, 0xff'00'00'00);
 
 		if(!(frame_i % 4))
-			my_scene2.tick({0, 0.001 * 16});
-		my_scene.tick({0, 0.001});
+			my_scene2.tick();
+		my_scene.tick();
 		frame_i++;
 
 		uint64_t time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
