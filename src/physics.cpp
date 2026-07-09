@@ -124,8 +124,8 @@ inline bool collision(Object *a, Object *b, CircleHitbox *ha, CircleHitbox *hb, 
 			*hit_vel_normal = (b->vel + (b->ang_vel * hit_b_rot) - (a->vel + (a->ang_vel * hit_a_rot))) * (*normal) - (*time_ratio * hit_acc_normal); // Made to be *compatible* with `depth` in terms of scaling
 			// hit_vel_normal is negative
 			*time_ratio -= depth / (*hit_vel_normal);
-			if(*time_ratio < 0) *time_ratio = 0;
-			if(*time_ratio > 1) *time_ratio = 1;
+			if(*time_ratio < -0.5) *time_ratio = -0.5; // time_ratio should technically be within [0, 1], but I found this to be more stable
+			if(*time_ratio > 1.5) *time_ratio = 1.5;
 		}
 
 		return true;
