@@ -54,6 +54,7 @@ Object::Object(Vec2 pos, Vec2 vel, float angle, float r)
 	this->ang_acc = 0; // TODO: Remove this when adding angular acceleration
 	this->mass_inv = 1 / (r * r);
 	this->moi_inv = 1;
+	this->restitution = 0.95;
 	this->hitbox.circle_count = 2;
 	// TODO: Make the hitboxes be all in an array for faster processing
 	this->hitbox.circles = (CircleHitbox*) malloc(2 * sizeof(CircleHitbox));
@@ -199,7 +200,7 @@ inline void collision(Object *a, Object *b)
 				);
 
 				Vec2 impulse = 2 * eff_mass_a * eff_mass_b / (eff_mass_a + eff_mass_b) * normal_sq_inv * hit_vel_normal * normal;
-				// TODO: Add restitution
+				impulse = a->restitution * b->restitution * impulse;
 				a->nudge( impulse, hit_a, time_ratio);
 				b->nudge(-impulse, hit_b, time_ratio);
 			}
