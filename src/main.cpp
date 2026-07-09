@@ -51,7 +51,9 @@ void draw_circle(SDL_Surface* target, float cx, float cy, float r, uint32_t colo
 
 void draw_object(SDL_Surface* target, const Object& object, uint32_t color)
 {
-	draw_circle(target, (object.pos.x + (object.cos * object.hitbox.c.x) - (object.sin * object.hitbox.c.y)) * SCALE, (object.pos.y + (object.sin * object.hitbox.c.x) + (object.cos * object.hitbox.c.y)) * SCALE, object.hitbox.r * SCALE, color);
+	for(size_t i = 0; i < object.hitbox.circle_count; i++)
+		draw_circle(target, (object.pos.x + (object.cos * object.hitbox.circles[i].c.x) - (object.sin * object.hitbox.circles[i].c.y)) * SCALE, (object.pos.y + (object.sin * object.hitbox.circles[i].c.x) + (object.cos * object.hitbox.circles[i].c.y)) * SCALE, object.hitbox.circles[i].r * SCALE, color);
+	draw_circle(target, object.pos.x * SCALE, object.pos.y * SCALE, 8, 0xff'ff'ff'ff);
 }
 
 static void drawLine(SDL_Surface* surface,
@@ -179,23 +181,20 @@ int main(int argc, char** argv)
 		);
 
 	Scene my_scene;
-	//Scene my_scene2;
-	/*for(int xi = 0; xi < 1; xi++)
-		for(int yi = 0; yi < 5; yi++) {
-			Object my_obj({(float) (1 + xi), (float) (1 + yi)}, 0.4);
+	Scene my_scene2;
+	for(int xi = 0; xi < 1; xi++)
+		for(int yi = 0; yi < 2; yi++) {
+			Object my_obj({(float) (1 + 5*xi), (float) (1 + 2.5*yi)}, {yi * 0.01, xi * 0.01}, 0, 1);
 			my_scene.push_object(my_obj);
+			my_obj.vel = {4 * my_obj.vel.x, 4 * my_obj.vel.y};
 			my_scene2.push_object(my_obj);
-		}*/
-	Object my_obj({5, 4}, {0, 0.05}, 0, 1);
-	Object my_obj2({7, 6.5}, {0, -0.05}, M_PI, 1);
-	my_scene.push_object(my_obj);
-	my_scene.push_object(my_obj2);
+		}
 	//Object my_object({5, 4}, 1);
 	//Object my_object2({5, 4}, 1);
 
 	bool running = true;
-	//uint64_t TIME_STEP = 100'000;
-	uint64_t TIME_STEP = 16'667;
+	uint64_t TIME_STEP = 100'000;
+	//uint64_t TIME_STEP = 16'667;
 	//uint64_t TIME_STEP = 33'333;
 	uint64_t frame_i = 1;
 	uint64_t next_frame_timestamp = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count() + TIME_STEP;
@@ -210,8 +209,8 @@ int main(int argc, char** argv)
 		clear_surface(framebuffer, 0xff'00'00'00);
 
 		if(!(frame_i % 4))
-			//my_scene2.tick({0, 0.0005 * 16});
-		my_scene.tick({0, 0.0005});
+			my_scene2.tick({0, 0.001 * 16});
+		my_scene.tick({0, 0.001});
 		frame_i++;
 
 		uint64_t time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -225,13 +224,10 @@ int main(int argc, char** argv)
 		}
 		//draw_object(framebuffer, my_object2, 0xff'ff'ff'ff);
 		//draw_object(framebuffer, my_object, 0xff'00'00'ff);
-		for(int i = 0; i < my_scene.objects.size(); i++) {
+		for(int i = 0; i < my_scene.objects.size(); i++)
 			draw_object(framebuffer, my_scene.objects[i], 0xff'55'55'55);
-			draw_circle(framebuffer, my_scene.objects[i].pos.x * SCALE, my_scene.objects[i].pos.y * SCALE, 8, 0xff'ff'ff'ff);
-		}
-		for(int i = 0; i < my_scene.objects.size(); i++) {
-			//draw_object(framebuffer, my_scene2.objects[i], 0xff'00'00'ff);
-		}
+		for(int i = 0; i < my_scene2.objects.size(); i++)
+			draw_object(framebuffer, my_scene2.objects[i], 0xaa'00'aa'ff);
 
 		SDL_UpdateTexture(
 			texture,

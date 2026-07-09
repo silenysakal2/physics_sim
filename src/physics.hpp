@@ -33,14 +33,22 @@ struct CircleHitbox
 
 struct PolygonHitbox
 {
-	uint32_t n;
+	uint32_t n; // TODO: Implement actual polygon hitboxes
 	Vec2 *points;
+};
+
+struct Hitbox
+{
+	size_t circle_count;
+	CircleHitbox *circles;
+	size_t polygon_count;
+	PolygonHitbox *polygons;
 };
 
 struct Object
 {
 	uint32_t flags;
-	/*
+	/* TODO: Implement the flags
 	Bits 0--7: Reserved for memory ownership stuff in the future
 	Bits 8--11: Order-of-magnitude mass
 	Bit 12: No *positional* acceleration
@@ -59,12 +67,11 @@ struct Object
 	float mass_inv; // 1 / mass
 	float moi_inv; // 1 / moment of inertia
 
-	CircleHitbox hitbox;
+	Hitbox hitbox;
 
 	Object(Vec2 pos, Vec2 vel, float angle, float r);
 
 	void update(Vec2 acc);
-	inline void collision(Object *other);
 	inline void bounce(
 		Vec2 normal, // Should point towards this object; does NOT have to be a unit vector (it's faster than doing square roots)
 		Vec2 comfv, // Velocity of the center-of-mass frame
@@ -78,6 +85,9 @@ struct Object
 		float time_ratio = 0.5
 	);
 };
+
+inline void collision(Object *a, Object *b);
+inline bool collision(Object *a, Object *b, CircleHitbox *ha, CircleHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *time_ratio);
 
 struct Scene
 {

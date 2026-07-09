@@ -54,7 +54,12 @@ Object::Object(Vec2 pos, Vec2 vel, float angle, float r)
 	this->ang_acc = 0; // TODO: Remove this when adding angular acceleration
 	this->mass_inv = 1 / (r * r);
 	this->moi_inv = 1;
-	this->hitbox = {{1, 0}, r};
+	this->hitbox.circle_count = 2;
+	// TODO: Make the hitboxes be all in an array for faster processing
+	this->hitbox.circles = (CircleHitbox*) malloc(2 * sizeof(CircleHitbox));
+	this->hitbox.circles[0] = {{r, 0}, r};
+	this->hitbox.circles[1] = {{-r, 0}, r};
+	this->hitbox.polygon_count = 0;
 }
 
 
@@ -71,16 +76,16 @@ void Object::update(Vec2 acc)
 	this->sin = std::sin(this->angle);
 	this->cos = std::cos(this->angle);
 
-	if(this->pos.x < this->hitbox.r)
-		bounce({1, 0}, {0, 0}, this->hitbox.r - this->pos.x, this->acc);
-	if(this->pos.x > (16 - this->hitbox.r))
-		bounce({-1, 0}, {0, 0}, this->pos.x - 16 + this->hitbox.r, this->acc);
+	if(this->pos.x < this->hitbox.circles[0].r)
+		bounce({1, 0}, {0, 0}, this->hitbox.circles[0].r - this->pos.x, this->acc);
+	if(this->pos.x > (16 - this->hitbox.circles[0].r))
+		bounce({-1, 0}, {0, 0}, this->pos.x - 16 + this->hitbox.circles[0].r, this->acc);
 	if((this->pos.y - 8) > this->pos.x)
 		bounce({1, -1}, {0, 0}, (this->pos.y - 8 - this->pos.x), this->acc);
 	if((this->pos.y + this->pos.x) > 24)
 		bounce({-1, -1}, {0, 0}, (this->pos.y + this->pos.x - 24), this->acc);
-	if(this->pos.y > (16 - this->hitbox.r))
-		bounce({0, -1}, {0, 0}, this->pos.y - 16 + this->hitbox.r, this->acc);
+	if(this->pos.y > (16 - this->hitbox.circles[0].r))
+		bounce({0, -1}, {0, 0}, this->pos.y - 16 + this->hitbox.circles[0].r, this->acc);
 }
 
 
@@ -116,67 +121,88 @@ inline void Object::nudge(
 )
 {
 	this->vel += impulse * this->mass_inv;
-	this->pos += impulse * this->mass_inv * (2*time_ratio);
+	this->pos += impulse * this->mass_inv * (time_ratio);
 	this->ang_vel += ((Vec2) {-rel.y, rel.x}) * impulse * this->moi_inv;
-	this->angle += ((Vec2) {-rel.y, rel.x}) * impulse * this->moi_inv * (2*time_ratio);
+	this->angle += ((Vec2) {-rel.y, rel.x}) * impulse * this->moi_inv * (time_ratio);
 }
 
 
-inline void Object::collision(Object *other)
+inline bool collision(Object *a, Object *b, CircleHitbox *ha, CircleHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *time_ratio)
 {
-	Vec2 ca = {(this ->cos * this ->hitbox.c.x) - (this ->sin * this ->hitbox.c.y), (this ->sin * this ->hitbox.c.x) + (this ->cos * this ->hitbox.c.y)};
-	Vec2 cb = {(other->cos * other->hitbox.c.x) - (other->sin * other->hitbox.c.y), (other->sin * other->hitbox.c.x) + (other->cos * other->hitbox.c.y)};
-	Vec2 rel = (other->pos + cb) - (this->pos + ca);
+	Vec2 ca = {(a->cos * ha->c.x) - (a->sin * ha->c.y), (a->sin * ha->c.x) + (a->cos * ha->c.y)};
+	Vec2 cb = {(b->cos * hb->c.x) - (b->sin * hb->c.y), (b->sin * hb->c.x) + (b->cos * hb->c.y)};
+	Vec2 rel = (b->pos + cb) - (a->pos + ca);
 	float dist_sq = rel * rel;
-	float max_dist_sq = (this->hitbox.r + other->hitbox.r) * (this->hitbox.r + other->hitbox.r);
+	float max_dist_sq = (ha->r + hb->r) * (ha->r + hb->r);
 
 	if(dist_sq < max_dist_sq) {
-		float depth = 0.5 * (max_dist_sq - dist_sq);
-
-		// Calculate relative hit positions
-		// Hit positions could only be approximated more precisely with more sin and cos calculations, which I want to avoid.
-		// TODO: Better approximation (will involve depth and time_ratio recalculation all at once)
-		float dist_inv = 1 / (this->hitbox.r + other->hitbox.r - depth);
-		Vec2 hit_a = ca + (this ->hitbox.r * dist_inv * rel); // Collision location relative to A's COM
-		Vec2 hit_b = cb - (other->hitbox.r * dist_inv * rel);
-		Vec2 hit_a_rot = ((Vec2) {-hit_a.y, hit_a.x});
-		Vec2 hit_b_rot = ((Vec2) {-hit_b.y, hit_b.x});
-
-		Vec2 normal = rel;
-		float normal_sq_inv = 1 / (normal * normal); // Using this we deal with non-unit normal vectors without actually needing sqrt
-		float hit_vel_normal = (other->vel + (other->ang_vel * hit_b_rot) - (this->vel + (this ->ang_vel * hit_a_rot))) * normal; // Made to be *compatible* with `depth` in terms of scaling
-		float hit_acc_normal = (other->acc + (other->ang_acc * hit_b_rot) - (this->acc + (this ->ang_acc * hit_a_rot))) * normal;
-		float time_ratio = 0.5;
+		Vec2 rel_vel = b->vel - a->vel;
+		Vec2 rel_acc = b->acc - a->acc;
+		*time_ratio = 0.5;
 		constexpr int ITERATION_COUNT = 2;
-		for(int it_i = 0; it_i < ITERATION_COUNT; it_i++) { // An approximation of when within the tick has the bounce occured, without needing a sqrt
-			float avg_vel = hit_vel_normal - (0.5*time_ratio * hit_acc_normal); // Estimated average velocity after bouncing; based on the previous bounce time ratio
-			time_ratio = depth / avg_vel;
+		for(int it_i = 0; it_i < ITERATION_COUNT; it_i++) { // An approximation of when within the tick the bounce occured
+			// Recalculate the relative circle positions according to the time_ratio
+			ca = {((a->cos+(*time_ratio*a->ang_vel*a->sin)) * ha->c.x) - ((a->sin-(*time_ratio*a->ang_vel*a->cos)) * ha->c.y), ((a->sin-(*time_ratio*a->ang_vel*a->cos)) * ha->c.x) + ((a->cos+(*time_ratio*a->ang_vel*a->sin)) * ha->c.y)}; // Please predend you don't see the duplicate code on this line
+			cb = {((b->cos+(*time_ratio*a->ang_vel*b->sin)) * hb->c.x) - ((b->sin-(*time_ratio*a->ang_vel*b->cos)) * hb->c.y), ((b->sin-(*time_ratio*a->ang_vel*b->cos)) * hb->c.x) + ((b->cos+(*time_ratio*a->ang_vel*b->sin)) * hb->c.y)};
+			rel = (b->pos + cb) - (a->pos + ca) - (*time_ratio * (rel_vel - (*time_ratio*0.5*rel_acc)));
+			dist_sq = rel * rel;
+			float depth = 0.5 * (max_dist_sq - dist_sq); // How deep into each other the objects were, at the estimated time ratio; it should be about as much longer than the actual depth as the normal vector
+			// We multiply by the sum of radii to approximately match it with the length of the normal vector, by whose length the normal relative velocity will be multiplied
+			*normal = rel; // Not necessarily a unit vector
+
+			// Calculate relative hit positions
+			// Hit positions could only be approximated more precisely with more sin and cos calculations, which I want to avoid.
+			float dist_inv = 1 / (ha->r + hb->r - depth);
+			*hit_a = ca + (ha->r * dist_inv * rel); // Collision location relative to A's COM
+			*hit_b = cb - (hb->r * dist_inv * rel);
+			Vec2 hit_a_rot = ((Vec2) {-hit_a->y, hit_a->x}); // Those are to get compiled away
+			Vec2 hit_b_rot = ((Vec2) {-hit_b->y, hit_b->x});
+
+			float hit_acc_normal = (b->acc + (b->ang_acc * hit_b_rot) - (a->acc + (a->ang_acc * hit_a_rot))) * (*normal);
+			*hit_vel_normal = (b->vel + (b->ang_vel * hit_b_rot) - (a->vel + (a->ang_vel * hit_a_rot))) * (*normal) - (*time_ratio * hit_acc_normal); // Made to be *compatible* with `depth` in terms of scaling
+			// hit_vel_normal is negative
+			*time_ratio -= depth / (*hit_vel_normal);
+			if(*time_ratio < 0) *time_ratio = 0;
+			if(*time_ratio > 1) *time_ratio = 1;
 		}
-		if(time_ratio < 0) time_ratio = 0;
-		if(time_ratio > 1) time_ratio = 1;
-		std::cout << "Time ratio: " << time_ratio << '\n';
-		time_ratio = 0.5; // Hotfix [TODO: fix properly]
 
-		// Effective mass: if you only care about the surroundings of the hit, you can make the object act as if its COM lied along the normal vector
-		// TODO: Add friction
-		float eff_mass_a = 1 / (
-			this->mass_inv +
-			(this->moi_inv * (normal * hit_a_rot) * (normal * hit_a_rot) * normal_sq_inv)
-		);
-		float eff_mass_b = 1 / (
-			other->mass_inv +
-			(other->moi_inv * (normal * hit_b_rot) * (normal * hit_b_rot) * normal_sq_inv)
-		);
-		std::cout << "Eff masses: " << eff_mass_a << ' ' << eff_mass_b << '\n';
-		// TODO: Make relative velocity more precise at this point in time
-
-		Vec2 impulse = 2 * eff_mass_a * eff_mass_b / (eff_mass_a + eff_mass_b) * normal_sq_inv * hit_vel_normal * normal;
-		std::cout << "Impulse: " << impulse.x << ' ' << impulse.y << '\n';
-		// TODO: Add restitution
-
-		this ->nudge( impulse, hit_a, time_ratio);
-		other->nudge(-impulse, hit_b, time_ratio);
+		return true;
 	}
+	else
+		return false;
+}
+
+
+inline void collision(Object *a, Object *b)
+{
+	float time_ratio;
+	Vec2 hit_a, hit_b;
+	Vec2 normal;
+	float hit_vel_normal;
+	for(size_t ai = 0; ai < a->hitbox.circle_count; ai++)
+		for(size_t bi = 0; bi < b->hitbox.circle_count; bi++)
+			if(collision(a, b, a->hitbox.circles + ai, b->hitbox.circles + bi, &hit_a, &hit_b, &normal, &hit_vel_normal, &time_ratio)) {
+				// TODO: Add friction
+
+				// Effective mass: if you only care about the surroundings of the hit, you can make the object act as if its COM lied along the normal vector
+				Vec2 hit_a_rot = {-hit_a.y, hit_a.x};
+				Vec2 hit_b_rot = {-hit_b.y, hit_b.x};
+				float normal_sq_inv = 1 / (normal * normal); // This should get compiled away with inlining
+
+				float eff_mass_a = 1 / (
+					a->mass_inv +
+					(a->moi_inv * (normal * hit_a_rot) * (normal * hit_a_rot) * normal_sq_inv)
+				);
+				float eff_mass_b = 1 / (
+					b->mass_inv +
+					(b->moi_inv * (normal * hit_b_rot) * (normal * hit_b_rot) * normal_sq_inv)
+				);
+
+				Vec2 impulse = 2 * eff_mass_a * eff_mass_b / (eff_mass_a + eff_mass_b) * normal_sq_inv * hit_vel_normal * normal;
+				// TODO: Add restitution
+				a->nudge( impulse, hit_a, time_ratio);
+				b->nudge(-impulse, hit_b, time_ratio);
+			}
 }
 
 
@@ -186,7 +212,7 @@ void Scene::tick(Vec2 acc)
 		this->objects[i].update(acc);
 	for(size_t a = 0; a < this->objects.size(); a++)
 		for(size_t b = 0; b < a; b++)
-			this->objects[a].collision(&this->objects[b]);
+			collision(&this->objects[a], &this->objects[b]);
 }
 
 void Scene::push_object(const Object& object)
