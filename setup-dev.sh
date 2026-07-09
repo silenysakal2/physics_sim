@@ -1,11 +1,11 @@
 build()
 {
-	g++ -o main src/main.cpp src/physics.cpp -lSDL3 -O1
+	g++ -o main src/main.cpp src/physics.cpp -lSDL3 -O1 -ffast-math
 }
 
 release()
 {
-	g++ -o main src/main.cpp src/physics.cpp -lSDL3 -O3
+	g++ -o main src/main.cpp src/physics.cpp -lSDL3 -O3 -ffast-math
 }
 
 run()
