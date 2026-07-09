@@ -184,9 +184,9 @@ int main(int argc, char** argv)
 	Scene my_scene2;
 	for(int xi = 0; xi < 1; xi++)
 		for(int yi = 0; yi < 2; yi++) {
-			Object my_obj({(float) (1 + 5*xi), (float) (1 + 2.5*yi)}, {yi * 0.01, xi * 0.01}, 0, 1);
+			Object my_obj({(float) (1 + 5*xi), (float) (1 + 2.5*yi)}, {(float) (yi * 0.01), (float) (xi * 0.01)}, 0, 1);
 			my_scene.push_object(my_obj);
-			my_obj.vel = {4 * my_obj.vel.x, 4 * my_obj.vel.y};
+			my_obj.vel *= 4;
 			my_scene2.push_object(my_obj);
 		}
 	//Object my_object({5, 4}, 1);

@@ -6,44 +6,6 @@
 #include <vector>
 
 
-inline Vec2 Vec2::operator+(const Vec2 other) const
-{
-	return {this->x + other.x, this->y + other.y};
-}
-inline void Vec2::operator+=(const Vec2 other)
-{
-	*this = *this + other;
-}
-
-inline Vec2 Vec2::operator-() const
-{
-	return {-this->x, -this->y};
-}
-inline Vec2 Vec2::operator-(const Vec2 other) const
-{
-	return {this->x - other.x, this->y - other.y};
-}
-
-inline float Vec2::operator*(const Vec2 other) const
-{
-	return (this->x * other.x) + (this->y * other.y);
-}
-
-inline Vec2 Vec2::operator*(const float mul) const
-{
-	return {mul * this->x, mul * this->y};
-}
-inline Vec2 operator*(const float mul, Vec2 vec)
-{
-	return {mul * vec.x, mul * vec.y};
-}
-
-inline Vec2 Vec2::operator/(const float div) const
-{
-	return {this->x / div, this->y / div};
-}
-
-
 
 Object::Object(Vec2 pos, Vec2 vel, float angle, float r)
 {
@@ -200,7 +162,7 @@ inline void collision(Object *a, Object *b)
 				);
 
 				Vec2 impulse = 2 * eff_mass_a * eff_mass_b / (eff_mass_a + eff_mass_b) * normal_sq_inv * hit_vel_normal * normal;
-				impulse = a->restitution * b->restitution * impulse;
+				impulse *= a->restitution * b->restitution;
 				a->nudge( impulse, hit_a, time_ratio);
 				b->nudge(-impulse, hit_b, time_ratio);
 			}

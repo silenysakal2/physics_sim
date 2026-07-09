@@ -8,21 +8,31 @@
 
 struct Vec2
 {
-    float x, y;
+	float x, y;
 
-    inline Vec2 operator+(const Vec2 other) const;
-    inline void operator+=(const Vec2 other);
-    inline Vec2 operator-() const;
-    inline Vec2 operator-(const Vec2 other) const;
-    inline float operator*(const Vec2 other) const;
-    inline Vec2 operator*(const float mul) const;
-    inline Vec2 operator/(const float div) const;
+	inline Vec2 operator+(const Vec2 other) const {
+		return {this->x + other.x, this->y + other.y};}
+	inline void operator+=(const Vec2 other) {
+		*this = *this + other;}
+	inline Vec2 operator-() const {
+		return {-this->x, -this->y};}
+	inline Vec2 operator-(const Vec2 other) const {
+		return {this->x - other.x, this->y - other.y};}
+	inline float operator*(const Vec2 other) const {
+		return (this->x * other.x) + (this->y * other.y);}
+	inline Vec2 operator*(const float mul) const {
+		return {mul * this->x, mul * this->y};}
+	inline void operator*=(const float mul) {
+		*this = *this * mul;}
+	inline Vec2 operator/(const float div) const {
+		return {this->x / div, this->y / div};}
 };
-inline Vec2 operator*(const float mul, Vec2 vec);
+inline Vec2 operator*(const float mul, Vec2 vec) {
+	return {mul * vec.x, mul * vec.y};}
 
 struct Vec3
 {
-    float x, y, z;
+	float x, y, z;
 };
 
 struct CircleHitbox
