@@ -58,6 +58,7 @@ struct Hitbox
 	PolygonHitbox *polygons;
 };
 
+const uint32_t OoM_MASS_BIT = 0x00'00'0f'00;
 const uint32_t NO_GRAVITY_BIT = 0x00'00'10'00;
 const uint32_t COLLISION_LAYERS_BIT = 0xff'ff'00'00;
 struct Object
@@ -65,7 +66,7 @@ struct Object
 	uint32_t flags;
 	/*
 	Bits 0--7: Reserved for memory ownership stuff in the future [TODO]
-	Bits 8--11: Order-of-magnitude mass [TODO]
+	Bits 8--11: Order-of-magnitude mass
 	Bit 12: No gravity acceleration
 	Bits 13--15: idk
 	Bits 16--31: Collision layers
@@ -103,8 +104,8 @@ struct Object
 
 inline void collision(Object *a, Object *b);
 inline bool collision(Object *a, Object *b, CircleHitbox *ha, CircleHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *time_ratio);
-inline bool collision(Object *a, Object *b, CircleHitbox *ha, PolygonHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *time_ratio)
-inline bool collision(Object *a, Object *b, PolygonHitbox *ha, PolygonHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *time_ratio)
+inline bool collision(Object *a, Object *b, CircleHitbox *ha, PolygonHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *time_ratio);
+inline bool collision(Object *a, Object *b, PolygonHitbox *ha, PolygonHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *time_ratio);
 
 struct Scene
 {

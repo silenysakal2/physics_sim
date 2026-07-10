@@ -132,7 +132,7 @@ int main(int argc, char** argv)
 	Scene my_scene2((float) 1. / 15, {0, 9.81});
 	for(int xi = 0; xi < 3; xi++)
 		for(int yi = 0; yi < 2; yi++) {
-			Object my_obj({(float) (1 + 5*xi), (float) (1 + 5*yi)}, {(float) yi, (float) xi}, 0, 1);
+			Object my_obj({(float) (1 + 5*xi), (float) (1 + 5*yi)}, {(float) yi, (float) xi}, 0, 1, COLLISION_LAYERS_BIT | (yi ? (NO_GRAVITY_BIT | OoM_MASS_BIT) : 0));
 			my_scene.push_object(my_obj);
 			my_scene2.push_object(my_obj);
 		}

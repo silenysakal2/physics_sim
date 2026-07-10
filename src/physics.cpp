@@ -29,9 +29,9 @@ Object::Object(Vec2 pos, Vec2 vel, float angle, float r, uint32_t flags)
 	this->hitbox.polygons[0].n = 5;
 	this->hitbox.polygons[0].points = (Vec2*) malloc(5 * sizeof(Vec2));
 	this->hitbox.polygons[0].points[0] = {2, 0};
-	this->hitbox.polygons[0].points[1] = {0, 2};
+	this->hitbox.polygons[0].points[1] = {0, 1};
 	this->hitbox.polygons[0].points[2] = {-2, 0};
-	this->hitbox.polygons[0].points[3] = {0, -2};
+	this->hitbox.polygons[0].points[3] = {0, -1};
 	this->hitbox.polygons[0].points[4] = {2, 0};
 }
 
@@ -121,10 +121,24 @@ inline void bounce(
 		(b->moi_inv * (normal * hit_b_rot) * (normal * hit_b_rot) * normal_sq_inv)
 	);
 
-	Vec2 impulse = 2 * eff_mass_a * eff_mass_b / (eff_mass_a + eff_mass_b) * normal_sq_inv * hit_vel_normal * normal;
-	impulse *= a->restitution * b->restitution;
-	a->nudge( impulse, hit_a, time_ratio);
-	b->nudge(-impulse, hit_b, time_ratio);
+	if((a->flags & OoM_MASS_BIT) == (b->flags & OoM_MASS_BIT)) {
+
+		Vec2 impulse = 2 * eff_mass_a * eff_mass_b / (eff_mass_a + eff_mass_b) * normal_sq_inv * hit_vel_normal * normal;
+		impulse *= a->restitution * b->restitution;
+		a->nudge( impulse, hit_a, time_ratio);
+		b->nudge(-impulse, hit_b, time_ratio);
+	}
+
+	else if((a->flags & OoM_MASS_BIT) < (b->flags & OoM_MASS_BIT)) {
+		Vec2 impulse = 2 * eff_mass_a * normal_sq_inv * hit_vel_normal * normal;
+		impulse *= a->restitution * b->restitution;
+		a->nudge(impulse, hit_a, time_ratio);
+	}
+	else {
+		Vec2 impulse = 2 * eff_mass_b * normal_sq_inv * hit_vel_normal * normal;
+		impulse *= a->restitution * b->restitution;
+		b->nudge(-impulse, hit_b, time_ratio);
+	}
 }
 
 
@@ -206,7 +220,7 @@ inline bool collision(Object *a, Object *b, CircleHitbox *ha, PolygonHitbox *hb,
 				Vec2 hit_b_rot = ((Vec2) {-hit_b->y, hit_b->x});
 				Vec2 rel_vel = b->vel - a->vel;
 				*hit_vel_normal = (rel_vel + (b->ang_vel * hit_b_rot) - (a->ang_vel * hit_a_rot)) * (*normal);
-				if((dist < len * (ha->r)) && (dist > (*hit_vel_normal * len)) && (*hit_vel_normal < 0)) { // In each other AND not too far AND they're moving closer
+				if((dist < len * (ha->r)) && (dist > (*hit_vel_normal * len)) && (*hit_vel_normal < 0)) { // In each other AND not too far in AND they're moving closer
 					*time_ratio = 0.5;
 					return true;
 				}
