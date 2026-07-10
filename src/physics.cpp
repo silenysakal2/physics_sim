@@ -19,12 +19,20 @@ Object::Object(Vec2 pos, Vec2 vel, float angle, float r, uint32_t flags)
 	this->mass_inv = 1 / (r * r);
 	this->moi_inv = 1;
 	this->restitution = 0.95;
-	this->hitbox.circle_count = 2;
+	this->hitbox.circle_count = 0;
 	// TODO: Make the hitboxes be all in an array for faster processing
 	this->hitbox.circles = (CircleHitbox*) malloc(2 * sizeof(CircleHitbox));
 	this->hitbox.circles[0] = {{r, 0}, r};
 	this->hitbox.circles[1] = {{-r, 0}, r};
-	this->hitbox.polygon_count = 0;
+	this->hitbox.polygon_count = 1;
+	this->hitbox.polygons = (PolygonHitbox*) malloc(1 * sizeof(PolygonHitbox));
+	this->hitbox.polygons[0].n = 5;
+	this->hitbox.polygons[0].points = (Vec2*) malloc(5 * sizeof(Vec2));
+	this->hitbox.polygons[0].points[0] = {2, 0};
+	this->hitbox.polygons[0].points[1] = {0, 2};
+	this->hitbox.polygons[0].points[2] = {-2, 0};
+	this->hitbox.polygons[0].points[3] = {0, -2};
+	this->hitbox.polygons[0].points[4] = {2, 0};
 }
 
 
@@ -83,9 +91,40 @@ inline void Object::nudge(
 )
 {
 	this->vel += impulse * this->mass_inv;
-	this->pos += impulse * this->mass_inv * (time_ratio);
+	this->pos += impulse * this->mass_inv * (2*time_ratio);
 	this->ang_vel += ((Vec2) {-rel.y, rel.x}) * impulse * this->moi_inv;
-	this->angle += ((Vec2) {-rel.y, rel.x}) * impulse * this->moi_inv * (time_ratio);
+	this->angle += ((Vec2) {-rel.y, rel.x}) * impulse * this->moi_inv * (2*time_ratio);
+}
+
+
+inline void bounce(
+	Object *a, Object *b,
+	Vec2 hit_a, Vec2 hit_b, // Where were the objects hit, relative to their pos
+	Vec2 normal,
+	float hit_vel_normal,
+	float time_ratio
+)
+{
+	// TODO: Add friction
+
+	// Effective mass: if you only care about the surroundings of the hit, you can make the object act as if its COM lied along the normal vector
+	Vec2 hit_a_rot = {-hit_a.y, hit_a.x};
+	Vec2 hit_b_rot = {-hit_b.y, hit_b.x};
+	float normal_sq_inv = 1 / (normal * normal); // This should get compiled away with inlining
+
+	float eff_mass_a = 1 / (
+		a->mass_inv +
+		(a->moi_inv * (normal * hit_a_rot) * (normal * hit_a_rot) * normal_sq_inv)
+	);
+	float eff_mass_b = 1 / (
+		b->mass_inv +
+		(b->moi_inv * (normal * hit_b_rot) * (normal * hit_b_rot) * normal_sq_inv)
+	);
+
+	Vec2 impulse = 2 * eff_mass_a * eff_mass_b / (eff_mass_a + eff_mass_b) * normal_sq_inv * hit_vel_normal * normal;
+	impulse *= a->restitution * b->restitution;
+	a->nudge( impulse, hit_a, time_ratio);
+	b->nudge(-impulse, hit_b, time_ratio);
 }
 
 
@@ -100,6 +139,7 @@ inline bool collision(Object *a, Object *b, CircleHitbox *ha, CircleHitbox *hb, 
 	if(dist_sq < max_dist_sq) {
 		Vec2 rel_vel = b->vel - a->vel;
 		Vec2 rel_acc = b->acc - a->acc;
+		float dist_inv = 1 / (ha->r + hb->r);
 		*time_ratio = 0.5;
 		constexpr int ITERATION_COUNT = 2;
 		for(int it_i = 0; it_i < ITERATION_COUNT; it_i++) { // An approximation of when within the tick the bounce occured
@@ -114,7 +154,6 @@ inline bool collision(Object *a, Object *b, CircleHitbox *ha, CircleHitbox *hb, 
 
 			// Calculate relative hit positions
 			// Hit positions could only be approximated more precisely with more sin and cos calculations, which I want to avoid.
-			float dist_inv = 1 / (ha->r + hb->r - depth);
 			*hit_a = ca + (ha->r * dist_inv * rel); // Collision location relative to A's COM
 			*hit_b = cb - (hb->r * dist_inv * rel);
 			Vec2 hit_a_rot = ((Vec2) {-hit_a->y, hit_a->x}); // Those are to get compiled away
@@ -135,37 +174,93 @@ inline bool collision(Object *a, Object *b, CircleHitbox *ha, CircleHitbox *hb, 
 }
 
 
+inline bool collision(Object *a, Object *b, CircleHitbox *ha, PolygonHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *time_ratio)
+{
+	for(size_t i = 0; i < hb->n; i++) {
+		CircleHitbox point;
+		point.c = hb->points[i];
+		point.r = 0;
+		// TODO: Implement a specialized function
+		if(collision(a, b, ha, &point, hit_a, hit_b, normal, hit_vel_normal, time_ratio))
+			return true;
+
+		// Line collision
+		if(i < (hb->n-1)) {
+			Vec2 p0_rel = hb->points[i].rotate(b->sin, b->cos);
+			Vec2 p1_rel = hb->points[i+1].rotate(b->sin, b->cos);
+			Vec2 p0 = b->pos + p0_rel;
+			Vec2 p1 = b->pos + p1_rel;
+			Vec2 line = p1_rel - p0_rel;
+			float len = std::sqrt(line * line); // TODO: Cache the sqrt in the hitbox struct (Maybe unneeded in the end?)
+			float len_sq_inv = 1 / (line * line);
+			Vec2 c = a->pos + ha->c.rotate(a->sin, a->cos);
+			Vec2 c_rel = c - p0; // Relative to p0
+			float along_line = c_rel * line * len_sq_inv;
+			if((along_line >= 0) && (along_line <= 1)) { // Circle within the range of the line
+				*normal = {-line.y, line.x};
+				float dist = -(*normal) * c_rel;
+				// TODO: Make this more precise
+				*hit_b = line * along_line + p0_rel;
+				*hit_a = b->pos + (*hit_b) - a->pos;
+				Vec2 hit_a_rot = ((Vec2) {-hit_a->y, hit_a->x}); // Those are to get compiled away
+				Vec2 hit_b_rot = ((Vec2) {-hit_b->y, hit_b->x});
+				Vec2 rel_vel = b->vel - a->vel;
+				*hit_vel_normal = (rel_vel + (b->ang_vel * hit_b_rot) - (a->ang_vel * hit_a_rot)) * (*normal);
+				if((dist < len * (ha->r)) && (dist > (*hit_vel_normal * len)) && (*hit_vel_normal < 0)) { // In each other AND not too far AND they're moving closer
+					*time_ratio = 0.5;
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
+
+inline bool collision(Object *a, Object *b, PolygonHitbox *ha, PolygonHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *time_ratio)
+{
+	CircleHitbox point;
+	point.r = 0;
+	for(size_t i = 0; i < ha->n; i++) {
+		point.c = ha->points[i];
+		// TODO: implement a specialized function: we don't need corner-corner collision
+		if(collision(a, b, &point, hb, hit_a, hit_b, normal, hit_vel_normal, time_ratio))
+			return true;
+	}
+	for(size_t i = 0; i < hb->n; i++) {
+		point.c = hb->points[i];
+		if(collision(b, a, &point, ha, hit_b, hit_a, normal, hit_vel_normal, time_ratio)) {
+			*normal *= -1; // Swap A nad B
+			return true;
+		}
+	}
+	return false;
+}
+
+
 inline void collision(Object *a, Object *b)
 {
 	if(a->flags & b->flags & COLLISION_LAYERS_BIT) {
-		float time_ratio;
 		Vec2 hit_a, hit_b;
 		Vec2 normal;
 		float hit_vel_normal;
-		for(size_t ai = 0; ai < a->hitbox.circle_count; ai++)
+		float time_ratio;
+		for(size_t ai = 0; ai < a->hitbox.circle_count; ai++) {
 			for(size_t bi = 0; bi < b->hitbox.circle_count; bi++)
-				if(collision(a, b, a->hitbox.circles + ai, b->hitbox.circles + bi, &hit_a, &hit_b, &normal, &hit_vel_normal, &time_ratio)) {
-					// TODO: Add friction
-
-					// Effective mass: if you only care about the surroundings of the hit, you can make the object act as if its COM lied along the normal vector
-					Vec2 hit_a_rot = {-hit_a.y, hit_a.x};
-					Vec2 hit_b_rot = {-hit_b.y, hit_b.x};
-					float normal_sq_inv = 1 / (normal * normal); // This should get compiled away with inlining
-
-					float eff_mass_a = 1 / (
-						a->mass_inv +
-						(a->moi_inv * (normal * hit_a_rot) * (normal * hit_a_rot) * normal_sq_inv)
-					);
-					float eff_mass_b = 1 / (
-						b->mass_inv +
-						(b->moi_inv * (normal * hit_b_rot) * (normal * hit_b_rot) * normal_sq_inv)
-					);
-
-					Vec2 impulse = 2 * eff_mass_a * eff_mass_b / (eff_mass_a + eff_mass_b) * normal_sq_inv * hit_vel_normal * normal;
-					impulse *= a->restitution * b->restitution;
-					a->nudge( impulse, hit_a, time_ratio);
-					b->nudge(-impulse, hit_b, time_ratio);
-				}
+				if(collision(a, b, a->hitbox.circles + ai, b->hitbox.circles + bi, &hit_a, &hit_b, &normal, &hit_vel_normal, &time_ratio))
+					bounce(a, b, hit_a, hit_b, normal, hit_vel_normal, time_ratio);
+			for(size_t bi = 0; bi < b->hitbox.polygon_count; bi++)
+				if(collision(a, b, a->hitbox.circles + ai, b->hitbox.polygons + bi, &hit_a, &hit_b, &normal, &hit_vel_normal, &time_ratio))
+					bounce(a, b, hit_a, hit_b, normal, hit_vel_normal, time_ratio);
+		}
+		for(size_t ai = 0; ai < a->hitbox.polygon_count; ai++) {
+			for(size_t bi = 0; bi < b->hitbox.circle_count; bi++)
+				if(collision(b, a, b->hitbox.circles + bi, a->hitbox.polygons + ai, &hit_b, &hit_a, &normal, &hit_vel_normal, &time_ratio))
+					bounce(b, a, hit_b, hit_a, normal, hit_vel_normal, time_ratio);
+			for(size_t bi = 0; bi < b->hitbox.polygon_count; bi++)
+				if(collision(a, b, a->hitbox.polygons + ai, b->hitbox.polygons + bi, &hit_a, &hit_b, &normal, &hit_vel_normal, &time_ratio))
+					bounce(a, b, hit_a, hit_b, normal, hit_vel_normal, time_ratio);
+		}
 	}
 }
 
@@ -182,7 +277,7 @@ void Scene::tick()
 	for(size_t i = 0; i < this->objects.size(); i++)
 		this->objects[i].update();
 	for(size_t a = 0; a < this->objects.size(); a++)
-		for(size_t b = 0; b < a; b++)
+		for(size_t b = a+1; b < this->objects.size(); b++)
 			collision(&this->objects[a], &this->objects[b]);
 }
 

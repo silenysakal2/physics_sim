@@ -40,7 +40,7 @@ static void clear_surface(SDL_Surface* surface, uint32_t color)
 void draw_circle(SDL_Surface* target, Vec2 c, float r, uint32_t color)
 {
 	float r_sq = r * r;
-	float r_in_sq = (r-4) * (r-4);
+	float r_in_sq = (r-1.5) * (r-1.5);
 	for(int x = std::max(0, (int) (c.x - r - 1)); x < std::min(target->w, (int) (c.x + r + 2)); x++)
 		for(int y = std::max(0, (int) (c.y - r - 1)); y < std::min(target->h, (int) (c.y + r + 2)); y++) {
 			float len_sq = ((y-c.y) * (y-c.y)) + ((x-c.x) * (x-c.x));
@@ -85,7 +85,10 @@ static void draw_line(SDL_Surface* target, Vec2 a, Vec2 b, uint32_t color)
 void draw_object(SDL_Surface* target, const Object& object, uint32_t color)
 {
 	for(size_t i = 0; i < object.hitbox.circle_count; i++)
-		draw_circle(target, (Vec2) {(object.pos.x + (object.cos * object.hitbox.circles[i].c.x) - (object.sin * object.hitbox.circles[i].c.y)), (object.pos.y + (object.sin * object.hitbox.circles[i].c.x) + (object.cos * object.hitbox.circles[i].c.y))} * SCALE, object.hitbox.circles[i].r * SCALE, color);
+		draw_circle(target, (object.pos + object.hitbox.circles[i].c.rotate(object.sin, object.cos)) * SCALE, object.hitbox.circles[i].r * SCALE, color);
+	for(size_t i = 0; i < object.hitbox.polygon_count; i++)
+		for(size_t index = 0; index < object.hitbox.polygons[i].n-1; index++)
+			draw_line(target, (object.pos + object.hitbox.polygons[i].points[index].rotate(object.sin, object.cos)) * SCALE, (object.pos + object.hitbox.polygons[i].points[index+1].rotate(object.sin, object.cos)) * SCALE, color);
 	draw_circle(target, object.pos * SCALE, 8, 0xff'ff'ff'ff);
 	draw_line(target, object.pos * SCALE, (object.pos + ((Vec2) {object.cos, object.sin})) * SCALE, 0xff'ff'ff'ff);
 }
@@ -127,9 +130,9 @@ int main(int argc, char** argv)
 
 	Scene my_scene((float) 1. / 60, {0, 9.81});
 	Scene my_scene2((float) 1. / 15, {0, 9.81});
-	for(int xi = 0; xi < 4; xi++)
+	for(int xi = 0; xi < 3; xi++)
 		for(int yi = 0; yi < 2; yi++) {
-			Object my_obj({(float) (1 + 5*xi), (float) (1 + 2.5*yi)}, {(float) yi, (float) xi}, 0, 1);
+			Object my_obj({(float) (1 + 5*xi), (float) (1 + 5*yi)}, {(float) yi, (float) xi}, 0, 1);
 			my_scene.push_object(my_obj);
 			my_scene2.push_object(my_obj);
 		}
