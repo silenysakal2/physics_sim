@@ -82,6 +82,7 @@ struct Object
 	float mass_inv; // 1 / mass
 	float moi_inv; // 1 / moment of inertia
 	float restitution;
+	float friction;
 
 	Hitbox hitbox;
 

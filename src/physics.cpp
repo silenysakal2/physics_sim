@@ -19,6 +19,7 @@ Object::Object(Vec2 pos, Vec2 vel, float angle, float r, uint32_t flags)
 	this->mass_inv = 1 / (r * r);
 	this->moi_inv = 1;
 	this->restitution = 0.95;
+	this->friction = 0.5;
 	this->hitbox.circle_count = 0;
 	// TODO: Make the hitboxes be all in an array for faster processing
 	this->hitbox.circles = (CircleHitbox*) malloc(2 * sizeof(CircleHitbox));
@@ -105,37 +106,42 @@ inline void bounce(
 	float time_ratio
 )
 {
-	// TODO: Add friction
-
-	// Effective mass: if you only care about the surroundings of the hit, you can make the object act as if its COM lied along the normal vector
 	Vec2 hit_a_rot = {-hit_a.y, hit_a.x};
 	Vec2 hit_b_rot = {-hit_b.y, hit_b.x};
-	float normal_sq_inv = 1 / (normal * normal); // This should get compiled away with inlining
+	Vec2 tangent = {-normal.y, normal.x}; // This should get compiled away
+	float vel_tangent = (b->vel - a->vel - (time_ratio * (b->acc - a->acc)) + ((b->ang_vel - (time_ratio * b->ang_acc)) * hit_b_rot) - ((a->ang_vel - (time_ratio * a->ang_acc)) * hit_a_rot)) * tangent;
+	Vec2 impulse_direction;
+	if(vel_tangent > 0)
+		impulse_direction = normal + (a->friction * b->friction * tangent);
+	else
+		impulse_direction = normal + (a->friction * b->friction * tangent);
+	float normal_sq_inv = 1 / (normal * normal);
+	float imp_sq_inv = 1 / (impulse_direction * impulse_direction);
 
+	// Effective mass: if you only care about the surroundings of the hit, you can make the object act as if its COM lied along the normal vector
 	float eff_mass_a = 1 / (
 		a->mass_inv +
-		(a->moi_inv * (normal * hit_a_rot) * (normal * hit_a_rot) * normal_sq_inv)
+		(a->moi_inv * (normal * hit_a_rot) * (normal * hit_a_rot) * imp_sq_inv)
 	);
 	float eff_mass_b = 1 / (
 		b->mass_inv +
-		(b->moi_inv * (normal * hit_b_rot) * (normal * hit_b_rot) * normal_sq_inv)
+		(b->moi_inv * (normal * hit_b_rot) * (normal * hit_b_rot) * imp_sq_inv)
 	);
 
 	if((a->flags & OoM_MASS_BIT) == (b->flags & OoM_MASS_BIT)) {
-
-		Vec2 impulse = 2 * eff_mass_a * eff_mass_b / (eff_mass_a + eff_mass_b) * normal_sq_inv * hit_vel_normal * normal;
+		Vec2 impulse = 2 * eff_mass_a * eff_mass_b / (eff_mass_a + eff_mass_b) * normal_sq_inv * hit_vel_normal * impulse_direction;
 		impulse *= a->restitution * b->restitution;
 		a->nudge( impulse, hit_a, time_ratio);
 		b->nudge(-impulse, hit_b, time_ratio);
 	}
 
 	else if((a->flags & OoM_MASS_BIT) < (b->flags & OoM_MASS_BIT)) {
-		Vec2 impulse = 2 * eff_mass_a * normal_sq_inv * hit_vel_normal * normal;
+		Vec2 impulse = 2 * eff_mass_a * normal_sq_inv * hit_vel_normal * impulse_direction;
 		impulse *= a->restitution * b->restitution;
 		a->nudge(impulse, hit_a, time_ratio);
 	}
 	else {
-		Vec2 impulse = 2 * eff_mass_b * normal_sq_inv * hit_vel_normal * normal;
+		Vec2 impulse = 2 * eff_mass_b * normal_sq_inv * hit_vel_normal * impulse_direction;
 		impulse *= a->restitution * b->restitution;
 		b->nudge(-impulse, hit_b, time_ratio);
 	}
