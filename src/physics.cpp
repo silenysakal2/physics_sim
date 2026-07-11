@@ -216,7 +216,7 @@ inline bool collision(Object *a, Object *b, CircleHitbox *ha, PolygonHitbox *hb,
 			Vec2 c = a->pos + ha->c.rotate(a->sin, a->cos);
 			Vec2 c_rel = c - p0; // Relative to p0
 			float along_line = c_rel * line * len_sq_inv;
-			if((along_line >= 0) && (along_line <= 1)) { // Circle within the range of the line
+			if((along_line >= -(1./1024)) && (along_line <= (1025./1024))) { // Circle within the range of the line
 				*normal = {-line.y, line.x};
 				float dist = -(*normal) * c_rel;
 				// TODO: Make this more precise
@@ -226,7 +226,7 @@ inline bool collision(Object *a, Object *b, CircleHitbox *ha, PolygonHitbox *hb,
 				Vec2 hit_b_rot = ((Vec2) {-hit_b->y, hit_b->x});
 				Vec2 rel_vel = b->vel - a->vel;
 				*hit_vel_normal = (rel_vel + (b->ang_vel * hit_b_rot) - (a->ang_vel * hit_a_rot)) * (*normal);
-				if((dist < len * (ha->r)) && (dist > (*hit_vel_normal * len)) && (*hit_vel_normal < 0)) { // In each other AND not too far in AND they're moving closer
+				if((dist < len * (ha->r)) && (dist > (*hit_vel_normal * len * 2)) && (*hit_vel_normal < 0)) { // In each other AND not too far in AND they're moving closer
 					*time_ratio = 0.5;
 					return true;
 				}
