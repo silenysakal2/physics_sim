@@ -136,13 +136,13 @@ int main(int argc, char** argv)
 	cage_points[2] = {15, 15};
 	cage_points[3] = {15, 1};
 	PolygonHitbox cage_poly = {4, cage_points};
-	Object cage(OoM_MASS_BIT | NO_GRAVITY_BIT | COLLISION_LAYERS_BIT, {0, 0}, 0, 1, 1, 0.5, 0, 0, NULL, 1, &cage_poly, true);
+	Object cage(OoM_MASS_BIT | NO_GRAVITY_BIT | COLLISION_LAYERS_BIT, {0, 0}, 0, 1, 1, 0.75, 0, 0, NULL, 1, &cage_poly, true);
 	my_scene.push_object(cage);
 	my_scene2.push_object(cage);
 	for(int xi = 2; xi < 15; xi++)
-		for(int yi = 2; yi < 4; yi++) {
+		for(int yi = 2; yi < 10; yi++) {
 			CircleHitbox hitbox = {{0, 0}, 0.4};
-			Object my_obj(COLLISION_LAYERS_BIT, {xi, yi}, 0, 1, 1, 0.5, 0.5, 1, &hitbox, 0, NULL, true);
+			Object my_obj(COLLISION_LAYERS_BIT, {xi, yi}, 0, 1, 1, 0.75, 0.5, 1, &hitbox, 0, NULL, true);
 			my_scene.push_object(my_obj);
 			my_scene2.push_object(my_obj);
 		}
@@ -165,8 +165,8 @@ int main(int argc, char** argv)
 
 		clear_surface(framebuffer, 0xff'00'00'00);
 
-		if(!(frame_i % 4))
-			my_scene2.tick();
+		//if(!(frame_i % 4))
+			//my_scene2.tick();
 		my_scene.tick();
 		frame_i++;
 
@@ -175,15 +175,9 @@ int main(int argc, char** argv)
 			usleep(next_frame_timestamp - time);
 		next_frame_timestamp += TIME_STEP;
 
-		for(int x = 0; x < (512 - ((int) (128 * 0.4 / M_SQRT2))); x++) {
-			int y = x + 512 + ((int) (128 * 0.4 / M_SQRT2));
-			((uint32_t*) framebuffer->pixels)[framebuffer->w * y + x] = 0xffff0000;
-		}
-		//draw_object(framebuffer, my_object2, 0xff'ff'ff'ff);
-		//draw_object(framebuffer, my_object, 0xff'00'00'ff);
 		for(int i = 0; i < my_scene.objects.size(); i++)
 			draw_object(framebuffer, my_scene.objects[i], 0xff'55'55'55);
-		for(int i = 0; i < my_scene2.objects.size(); i++)
+		//for(int i = 0; i < my_scene2.objects.size(); i++)
 			//draw_object(framebuffer, my_scene2.objects[i], 0xaa'00'aa'ff);
 
 		SDL_UpdateTexture(

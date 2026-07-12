@@ -92,24 +92,12 @@ struct Object
 	Object(uint32_t flags, Vec2 pos, float angle, float mass, float moment_of_inertia, float restitution = 0.5, float friction = 0, size_t circle_count = 0, CircleHitbox *circles = NULL, size_t polygon_count = 0, PolygonHitbox *polygons = NULL, bool copy_hitboxes = true);
 
 	void update();
-	inline void bounce(
-		Vec2 normal, // Should point towards this object; does NOT have to be a unit vector (it's faster than doing square roots)
-		Vec2 comfv, // Velocity of the center-of-mass frame
-		float depth, // How deep the object was in the other collider. Has to be scaled according to the normal vector's length: when you multiply them, that must produce the actual shift
-		Vec2 relative_acc, // Relative acceleration
-		float time_ratio = 0.5 // How much of a tick has passed *before* the bounce has happened
-	);
 	inline void nudge(
 		Vec2 impulse,
-		Vec2 rel, // The point at which it was hit, relative to its pos (=COM)
-		float time_ratio = 0.5
+		Vec2 push,
+		Vec2 rel // The point at which it was hit, relative to its pos (=COM)
 	);
 };
-
-inline void collision(Object *a, Object *b);
-inline bool collision(Object *a, Object *b, CircleHitbox *ha, CircleHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *time_ratio);
-inline bool collision(Object *a, Object *b, CircleHitbox *ha, PolygonHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *time_ratio);
-inline bool collision(Object *a, Object *b, PolygonHitbox *ha, PolygonHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *time_ratio);
 
 struct Scene
 {
