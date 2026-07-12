@@ -139,10 +139,10 @@ int main(int argc, char** argv)
 	Object cage(OoM_MASS_BIT | NO_GRAVITY_BIT | COLLISION_LAYERS_BIT, {0, 0}, 0, 1, 1, 0.75, 0, 0, NULL, 1, &cage_poly, true);
 	my_scene.push_object(cage);
 	my_scene2.push_object(cage);
-	for(int xi = 2; xi < 15; xi++)
-		for(int yi = 2; yi < 10; yi++) {
-			CircleHitbox hitbox = {{0, 0}, 0.4};
-			Object my_obj(COLLISION_LAYERS_BIT, {xi, yi}, 0, 1, 1, 0.75, 0.5, 1, &hitbox, 0, NULL, true);
+	for(int xi = 1; xi < 8; xi++)
+		for(int yi = 1; yi < 8; yi++) {
+			CircleHitbox hitbox = {{0, 0}, (float) rand() / RAND_MAX};
+			Object my_obj(COLLISION_LAYERS_BIT, {(float) 2 * xi, (float) 2 * yi}, 0, 1, 1, 0.75, 0.5, 1, &hitbox, 0, NULL, true);
 			my_scene.push_object(my_obj);
 			my_scene2.push_object(my_obj);
 		}
@@ -173,6 +173,8 @@ int main(int argc, char** argv)
 		uint64_t time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 		if(time < next_frame_timestamp)
 			usleep(next_frame_timestamp - time);
+		else
+			std::cout << "Behind!\n";
 		next_frame_timestamp += TIME_STEP;
 
 		for(int i = 0; i < my_scene.objects.size(); i++)
