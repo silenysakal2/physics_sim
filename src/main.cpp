@@ -130,9 +130,19 @@ int main(int argc, char** argv)
 
 	Scene my_scene((float) 1. / 60, {0, 9.81});
 	Scene my_scene2((float) 1. / 15, {0, 9.81});
-	for(int xi = 0; xi < 3; xi++)
-		for(int yi = 0; yi < 2; yi++) {
-			Object my_obj({(float) (1 + 5*xi), (float) (1 + 5*yi)}, {(float) yi, (float) xi}, 0, 1, COLLISION_LAYERS_BIT | (yi ? (NO_GRAVITY_BIT | OoM_MASS_BIT) : 0));
+	Vec2 cage_points[4];
+	cage_points[0] = {1, 1};
+	cage_points[1] = {1, 15};
+	cage_points[2] = {15, 15};
+	cage_points[3] = {15, 1};
+	PolygonHitbox cage_poly = {4, cage_points};
+	Object cage(OoM_MASS_BIT | NO_GRAVITY_BIT | COLLISION_LAYERS_BIT, {0, 0}, 0, 1, 1, 0.5, 0, 0, NULL, 1, &cage_poly, true);
+	my_scene.push_object(cage);
+	my_scene2.push_object(cage);
+	for(int xi = 2; xi < 15; xi++)
+		for(int yi = 2; yi < 4; yi++) {
+			CircleHitbox hitbox = {{0, 0}, 0.4};
+			Object my_obj(COLLISION_LAYERS_BIT, {xi, yi}, 0, 1, 1, 0.5, 0.5, 1, &hitbox, 0, NULL, true);
 			my_scene.push_object(my_obj);
 			my_scene2.push_object(my_obj);
 		}

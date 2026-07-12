@@ -2,38 +2,53 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <vector>
 
 
 
-Object::Object(Vec2 pos, Vec2 vel, float angle, float r, uint32_t flags)
+Object::Object(uint32_t flags, Vec2 pos, float angle, float mass, float moment_of_inertia, float restitution, float friction, size_t circle_count, CircleHitbox *circles, size_t polygon_count, PolygonHitbox *polygons, bool copy_hitboxes)
 {
-	this->flags = flags;
+	this->flags = flags & (OoM_MASS_BIT | NO_GRAVITY_BIT | COLLISION_LAYERS_BIT); // Remove any unwanted stuff
 	this->pos = pos;
-	this->vel = vel;
+	this->vel = {0, 0};
 	this->acc = {0, 0};
 	this->angle = angle;
 	this->ang_vel = 0;
 	this->ang_acc = 0;
-	this->mass_inv = 1 / (r * r);
-	this->moi_inv = 1;
-	this->restitution = 0.95;
-	this->friction = 0.5;
-	this->hitbox.circle_count = 0;
+	this->mass_inv = 1 / mass;
+	this->moi_inv = 1 / moment_of_inertia;
+	this->restitution = restitution;
+	this->friction = friction;
+
 	// TODO: Make the hitboxes be all in an array for faster processing
-	this->hitbox.circles = (CircleHitbox*) malloc(2 * sizeof(CircleHitbox));
-	this->hitbox.circles[0] = {{r, 0}, r};
-	this->hitbox.circles[1] = {{-r, 0}, r};
-	this->hitbox.polygon_count = 1;
-	this->hitbox.polygons = (PolygonHitbox*) malloc(1 * sizeof(PolygonHitbox));
-	this->hitbox.polygons[0].n = 5;
-	this->hitbox.polygons[0].points = (Vec2*) malloc(5 * sizeof(Vec2));
-	this->hitbox.polygons[0].points[0] = {2, 0};
-	this->hitbox.polygons[0].points[1] = {0, 1};
-	this->hitbox.polygons[0].points[2] = {-2, 0};
-	this->hitbox.polygons[0].points[3] = {0, -1};
-	this->hitbox.polygons[0].points[4] = {2, 0};
+	this->hitbox.circle_count = circle_count;
+	if(copy_hitboxes) {
+		this->hitbox.circles = (CircleHitbox*) malloc(circle_count * sizeof(CircleHitbox));
+		memcpy(this->hitbox.circles, circles, circle_count * sizeof(CircleHitbox));
+	}
+	else
+		this->hitbox.circles = circles;
+
+	this->hitbox.polygon_count = polygon_count;
+	if(copy_hitboxes) {
+		size_t poly_segments = 0;
+		for(size_t i = 0; i < polygon_count; i++)
+			poly_segments += polygons[i].n;
+		char *pool = (char*) malloc((poly_segments * sizeof(Vec2)) + (polygon_count * sizeof(PolygonHitbox))); // A pool of memory from which the poly hitboxes will be allocated
+		this->hitbox.polygons = (PolygonHitbox*) pool;
+		pool += polygon_count * sizeof(PolygonHitbox);
+		for(size_t i = 0; i < polygon_count; i++) {
+			this->hitbox.polygons[i].n = polygons[i].n;
+			this->hitbox.polygons[i].points = (Vec2*) pool;
+			memcpy(this->hitbox.polygons[i].points, polygons[i].points, polygons[i].n * sizeof(Vec2));
+			pool += polygons[i].n * sizeof(Vec2);
+		}
+	}
+
+	if(copy_hitboxes)
+		this->flags |= SELF_OWNED_HITBOXES_BIT;
 }
 
 
@@ -45,43 +60,6 @@ void Object::update()
 	this->angle += this->ang_vel + (0.5*this->ang_acc);
 	this->ang_vel += this->ang_acc;
 	sincosf(this->angle, &this->sin, &this->cos);
-
-	// Hard-coded boundaries [TODO: remove when possible]
-	if(this->pos.x < this->hitbox.circles[0].r)
-		bounce({1, 0}, {0, 0}, this->hitbox.circles[0].r - this->pos.x, this->acc);
-	if(this->pos.x > (16 - this->hitbox.circles[0].r))
-		bounce({-1, 0}, {0, 0}, this->pos.x - 16 + this->hitbox.circles[0].r, this->acc);
-	if((this->pos.y - 8) > this->pos.x)
-		bounce({1, -1}, {0, 0}, (this->pos.y - 8 - this->pos.x), this->acc);
-	if((this->pos.y + this->pos.x) > 24)
-		bounce({-1, -1}, {0, 0}, (this->pos.y + this->pos.x - 24), this->acc);
-	if(this->pos.y > (16 - this->hitbox.circles[0].r))
-		bounce({0, -1}, {0, 0}, this->pos.y - 16 + this->hitbox.circles[0].r, this->acc);
-}
-
-
-inline void Object::bounce(
-	Vec2 normal, // Should point towards this object; does NOT have to be a unit vector (it's faster than doing square roots)
-	Vec2 comfv, // Velocity of the center-of-mass frame
-	float depth, // How deep the object was in the other collider. Has to be scaled according to the normal vector's length: it should be as larger than the actual shift as is the length of the normal vector
-	Vec2 rel_acc, // Relative acceleration
-	float time_ratio // How much of a tick has passed *before* the bounce has happened
-)
-{
-	// TODO: Remove this function when possible
-	Vec2 tangent = {normal.y, -normal.x};
-
-	float vel_normal = (this->vel - comfv) * normal; // Made to be *compatible* with `depth` in terms of scaling
-	float vel_tangent = (this->vel - comfv) * tangent;
-	float acc_normal = rel_acc * normal;
-	//float acc_tangent = rel_acc * tangent_inv_scaled; // This actually gets never used
-
-	float normal_len_sq = normal * normal; // Here we deal with non-unit normal vectors without actually needing sqrt
-	Vec2 normal_inv_scaled = (1 / normal_len_sq) * normal;
-	Vec2 tangent_inv_scaled = {normal_inv_scaled.y, -normal_inv_scaled.x};
-
-	this->pos += (depth - (time_ratio * (vel_normal - (time_ratio * acc_normal)))) * normal_inv_scaled;
-	this->vel = (vel_tangent * tangent_inv_scaled) - (0.95 * normal_inv_scaled * (vel_normal - (2*time_ratio * acc_normal))) + comfv;
 }
 
 
@@ -129,20 +107,20 @@ inline void bounce(
 	);
 
 	if((a->flags & OoM_MASS_BIT) == (b->flags & OoM_MASS_BIT)) {
-		Vec2 impulse = 2 * eff_mass_a * eff_mass_b / (eff_mass_a + eff_mass_b) * normal_sq_inv * hit_vel_normal * impulse_direction;
-		impulse *= a->restitution * b->restitution;
+		Vec2 impulse = eff_mass_a * eff_mass_b / (eff_mass_a + eff_mass_b) * normal_sq_inv * hit_vel_normal * impulse_direction;
+		impulse *= 1 + (a->restitution * b->restitution);
 		a->nudge( impulse, hit_a, time_ratio);
 		b->nudge(-impulse, hit_b, time_ratio);
 	}
 
 	else if((a->flags & OoM_MASS_BIT) < (b->flags & OoM_MASS_BIT)) {
-		Vec2 impulse = 2 * eff_mass_a * normal_sq_inv * hit_vel_normal * impulse_direction;
-		impulse *= a->restitution * b->restitution;
+		Vec2 impulse = eff_mass_a * normal_sq_inv * hit_vel_normal * impulse_direction;
+		impulse *= 1 + (a->restitution * b->restitution);
 		a->nudge(impulse, hit_a, time_ratio);
 	}
 	else {
-		Vec2 impulse = 2 * eff_mass_b * normal_sq_inv * hit_vel_normal * impulse_direction;
-		impulse *= a->restitution * b->restitution;
+		Vec2 impulse = eff_mass_b * normal_sq_inv * hit_vel_normal * impulse_direction;
+		impulse *= 1 + (a->restitution * b->restitution);
 		b->nudge(-impulse, hit_b, time_ratio);
 	}
 }

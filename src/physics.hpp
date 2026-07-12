@@ -46,8 +46,8 @@ struct CircleHitbox
 
 struct PolygonHitbox
 {
-	uint32_t n; // TODO: Implement actual polygon hitboxes
-	Vec2 *points;
+	size_t n;
+	Vec2 *points; // TODO: Cache segment lengths
 };
 
 struct Hitbox
@@ -58,6 +58,7 @@ struct Hitbox
 	PolygonHitbox *polygons;
 };
 
+const uint32_t SELF_OWNED_HITBOXES_BIT = 0x00'00'00'01;
 const uint32_t OoM_MASS_BIT = 0x00'00'0f'00;
 const uint32_t NO_GRAVITY_BIT = 0x00'00'10'00;
 const uint32_t COLLISION_LAYERS_BIT = 0xff'ff'00'00;
@@ -65,7 +66,9 @@ struct Object
 {
 	uint32_t flags;
 	/*
-	Bits 0--7: Reserved for memory ownership stuff in the future [TODO]
+	Bit 0: Self-owned hitboxes
+	Bit 1: Scene-owned hitboxes [TODO]
+	Bits 2--7: idk
 	Bits 8--11: Order-of-magnitude mass
 	Bit 12: No gravity acceleration
 	Bits 13--15: idk
@@ -86,7 +89,7 @@ struct Object
 
 	Hitbox hitbox;
 
-	Object(Vec2 pos, Vec2 vel, float angle, float r, uint32_t flags = COLLISION_LAYERS_BIT);
+	Object(uint32_t flags, Vec2 pos, float angle, float mass, float moment_of_inertia, float restitution = 0.5, float friction = 0, size_t circle_count = 0, CircleHitbox *circles = NULL, size_t polygon_count = 0, PolygonHitbox *polygons = NULL, bool copy_hitboxes = true);
 
 	void update();
 	inline void bounce(
