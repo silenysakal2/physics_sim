@@ -130,7 +130,7 @@ inline void bounce(
 }
 
 
-inline bool collision(Object *a, Object *b, CircleHitbox *ha, CircleHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *depth_end, float *time_ratio)
+inline void collision(Object *a, Object *b, CircleHitbox *ha, CircleHitbox *hb)
 {
 	Vec2 ca = ha->c.rotate(a->sin, a->cos);
 	Vec2 cb = hb->c.rotate(b->sin, b->cos);
@@ -139,53 +139,52 @@ inline bool collision(Object *a, Object *b, CircleHitbox *ha, CircleHitbox *hb, 
 	float max_dist_sq = (ha->r + hb->r) * (ha->r + hb->r);
 
 	if(dist_sq < max_dist_sq) {
-		*depth_end = 0.5 * (max_dist_sq - dist_sq);
+		float depth_end = 0.5 * (max_dist_sq - dist_sq); // Depth at the end of this tick (so that the object can be pushed out)
 		Vec2 rel_vel = b->vel - a->vel;
 		Vec2 rel_acc = b->acc - a->acc;
 		float dist_inv = 1 / (ha->r + hb->r);
-		*time_ratio = 0.5;
+		Vec2 normal = rel; // Not necessarily a unit vector
+		float time_ratio = 0.5;
 		constexpr int ITERATION_COUNT = 2;
+		Vec2 hit_a, hit_b;
+		float hit_vel_normal;
 		for(int it_i = 0; it_i < ITERATION_COUNT; it_i++) { // An approximation of when within the tick the bounce occured
 			// Recalculate the relative circle positions according to the time_ratio
-			ca = ha->c.rotate(a->sin, a->cos) + (*time_ratio * a->ang_vel * ha->c.rotate(-a->cos, a->sin));
-			cb = hb->c.rotate(b->sin, b->cos) + (*time_ratio * b->ang_vel * hb->c.rotate(-b->cos, b->sin));
-			rel = (b->pos + cb) - (a->pos + ca) - (*time_ratio * (rel_vel - (*time_ratio*0.5*rel_acc)));
+			ca = ha->c.rotate(a->sin, a->cos) + (time_ratio * a->ang_vel * ha->c.rotate(-a->cos, a->sin));
+			cb = hb->c.rotate(b->sin, b->cos) + (time_ratio * b->ang_vel * hb->c.rotate(-b->cos, b->sin));
+			rel = (b->pos + cb) - (a->pos + ca) - (time_ratio * (rel_vel - (time_ratio*0.5*rel_acc)));
 			dist_sq = rel * rel;
 			float depth = 0.5 * (max_dist_sq - dist_sq); // How deep into each other the objects were, at the estimated time ratio; it should be about as much longer than the actual depth as the normal vector
 			// We multiply by the sum of radii to approximately match it with the length of the normal vector, by whose length the normal relative velocity will be multiplied
-			*normal = rel; // Not necessarily a unit vector
 
 			// Calculate relative hit positions
 			// Hit positions could only be approximated more precisely with more sin and cos calculations, which I want to avoid.
-			*hit_a = ca + (ha->r * dist_inv * rel); // Collision location relative to A's COM
-			*hit_b = cb - (hb->r * dist_inv * rel);
-			Vec2 hit_a_rot = ((Vec2) {-hit_a->y, hit_a->x}); // Those are to get compiled away
-			Vec2 hit_b_rot = ((Vec2) {-hit_b->y, hit_b->x});
+			hit_a = ca + (ha->r * dist_inv * rel); // Collision location relative to A's COM
+			hit_b = cb - (hb->r * dist_inv * rel);
+			Vec2 hit_a_rot = ((Vec2) {-hit_a.y, hit_a.x}); // Those are to get compiled away
+			Vec2 hit_b_rot = ((Vec2) {-hit_b.y, hit_b.x});
 
-			float hit_acc_normal = (b->acc + (b->ang_acc * hit_b_rot) - (a->acc + (a->ang_acc * hit_a_rot))) * (*normal);
-			*hit_vel_normal = (b->vel + (b->ang_vel * hit_b_rot) - (a->vel + (a->ang_vel * hit_a_rot))) * (*normal) - (*time_ratio * hit_acc_normal); // Made to be *compatible* with `depth` in terms of scaling
+			float hit_acc_normal = (b->acc + (b->ang_acc * hit_b_rot) - (a->acc + (a->ang_acc * hit_a_rot))) * normal;
+			hit_vel_normal = (b->vel + (b->ang_vel * hit_b_rot) - (a->vel + (a->ang_vel * hit_a_rot))) * normal - (time_ratio * hit_acc_normal); // Made to be *compatible* with `depth` in terms of scaling
 			// hit_vel_normal is negative
-			*time_ratio -= depth / (*hit_vel_normal);
-			if(*time_ratio < -0.5) *time_ratio = -0.5; // time_ratio should technically be within [0, 1], but I found this to be more stable
-			if(*time_ratio > 1.5) *time_ratio = 1.5;
+			time_ratio -= depth / (hit_vel_normal);
+			if(time_ratio < -0.5) time_ratio = -0.5; // time_ratio should technically be within [0, 1], but I found this to be more stable
+			if(time_ratio > 1.5) time_ratio = 1.5;
 		}
 
-		return true;
+		bounce(a, b, hit_a, hit_b, normal, hit_vel_normal, depth_end, time_ratio);
 	}
-	else
-		return false;
 }
 
 
-inline bool collision(Object *a, Object *b, CircleHitbox *ha, PolygonHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *depth_end, float *time_ratio)
+inline void collision(Object *a, Object *b, CircleHitbox *ha, PolygonHitbox *hb)
 {
 	for(size_t i = 0; i < hb->n; i++) {
 		CircleHitbox point;
 		point.c = hb->points[i];
 		point.r = 0;
 		// TODO: Implement a specialized function
-		if(collision(a, b, ha, &point, hit_a, hit_b, normal, hit_vel_normal, depth_end, time_ratio))
-			return true;
+		collision(a, b, ha, &point);
 
 		// Line collision
 		if(i < (hb->n-1)) {
@@ -200,71 +199,56 @@ inline bool collision(Object *a, Object *b, CircleHitbox *ha, PolygonHitbox *hb,
 			Vec2 c_rel = c - p0; // Relative to p0
 			float along_line = c_rel * line * len_sq_inv;
 			if((along_line >= -(1./1024)) && (along_line <= (1025./1024))) { // Circle within the range of the line
-				*normal = {-line.y, line.x};
-				float dist = -(*normal) * c_rel;
+				Vec2 normal = {-line.y, line.x}; // To be compiled away
+				float dist = -normal * c_rel;
 				// TODO: Make this more precise
-				*hit_b = line * along_line + p0_rel;
-				*hit_a = b->pos + (*hit_b) - a->pos;
-				Vec2 hit_a_rot = ((Vec2) {-hit_a->y, hit_a->x}); // Those are to get compiled away
-				Vec2 hit_b_rot = ((Vec2) {-hit_b->y, hit_b->x});
+				Vec2 hit_b = line * along_line + p0_rel;
+				Vec2 hit_a = b->pos + (hit_b) - a->pos;
+				Vec2 hit_a_rot = ((Vec2) {-hit_a.y, hit_a.x}); // Those are to get compiled away
+				Vec2 hit_b_rot = ((Vec2) {-hit_b.y, hit_b.x});
 				Vec2 rel_vel = b->vel - a->vel;
-				*hit_vel_normal = (rel_vel + (b->ang_vel * hit_b_rot) - (a->ang_vel * hit_a_rot)) * (*normal);
-				if((dist < (ha->r * len)) && (dist > (*hit_vel_normal * len * 2)) && (*hit_vel_normal < 0)) { // In each other AND not too far in AND they're moving closer
-					*depth_end = len * ha->r - dist;
-					*time_ratio = 0.5;
-					return true;
+				float hit_vel_normal = (rel_vel + (b->ang_vel * hit_b_rot) - (a->ang_vel * hit_a_rot)) * normal;
+				if((dist < (ha->r * len)) && (dist > (hit_vel_normal * len * 2)) && (hit_vel_normal < 0)) { // In each other AND not too far in AND they're moving closer
+					float depth_end = len * ha->r - dist;
+					float time_ratio = 0.5;
+					bounce(a, b, hit_a, hit_b, normal, hit_vel_normal, depth_end, time_ratio);
 				}
 			}
 		}
 	}
-	return false;
 }
 
 
-inline bool collision(Object *a, Object *b, PolygonHitbox *ha, PolygonHitbox *hb, Vec2 *hit_a, Vec2 *hit_b, Vec2 *normal, float *hit_vel_normal, float *depth_end, float *time_ratio)
+inline void collision(Object *a, Object *b, PolygonHitbox *ha, PolygonHitbox *hb)
 {
 	CircleHitbox point;
 	point.r = 0;
 	for(size_t i = 0; i < ha->n; i++) {
 		point.c = ha->points[i];
 		// TODO: implement a specialized function: we don't need corner-corner collision
-		if(collision(a, b, &point, hb, hit_a, hit_b, normal, hit_vel_normal, depth_end, time_ratio))
-			return true;
+		collision(a, b, &point, hb);
 	}
 	for(size_t i = 0; i < hb->n; i++) {
 		point.c = hb->points[i];
-		if(collision(b, a, &point, ha, hit_b, hit_a, normal, hit_vel_normal, depth_end, time_ratio)) {
-			*normal *= -1; // Swap A nad B
-			return true;
-		}
+		collision(b, a, &point, ha);
 	}
-	return false;
 }
 
 
 inline void collision(Object *a, Object *b)
 {
 	if(a->flags & b->flags & COLLISION_LAYERS_BIT) {
-		Vec2 hit_a, hit_b;
-		Vec2 normal;
-		float hit_vel_normal;
-		float depth_end; // The depth at the end of the tick (so that the objects can push each other out)
-		float time_ratio;
 		for(size_t ai = 0; ai < a->hitbox.circle_count; ai++) {
 			for(size_t bi = 0; bi < b->hitbox.circle_count; bi++)
-				if(collision(a, b, a->hitbox.circles + ai, b->hitbox.circles + bi, &hit_a, &hit_b, &normal, &hit_vel_normal, &depth_end, &time_ratio))
-					bounce(a, b, hit_a, hit_b, normal, hit_vel_normal, depth_end, time_ratio);
+				collision(a, b, a->hitbox.circles + ai, b->hitbox.circles + bi);
 			for(size_t bi = 0; bi < b->hitbox.polygon_count; bi++)
-				if(collision(a, b, a->hitbox.circles + ai, b->hitbox.polygons + bi, &hit_a, &hit_b, &normal, &hit_vel_normal, &depth_end, &time_ratio))
-					bounce(a, b, hit_a, hit_b, normal, hit_vel_normal, depth_end, time_ratio);
+				collision(a, b, a->hitbox.circles + ai, b->hitbox.polygons + bi);
 		}
 		for(size_t ai = 0; ai < a->hitbox.polygon_count; ai++) {
 			for(size_t bi = 0; bi < b->hitbox.circle_count; bi++)
-				if(collision(b, a, b->hitbox.circles + bi, a->hitbox.polygons + ai, &hit_b, &hit_a, &normal, &hit_vel_normal, &depth_end, &time_ratio))
-					bounce(b, a, hit_b, hit_a, normal, hit_vel_normal, depth_end, time_ratio);
+				collision(b, a, b->hitbox.circles + bi, a->hitbox.polygons + ai);
 			for(size_t bi = 0; bi < b->hitbox.polygon_count; bi++)
-				if(collision(a, b, a->hitbox.polygons + ai, b->hitbox.polygons + bi, &hit_a, &hit_b, &normal, &hit_vel_normal, &depth_end, &time_ratio))
-					bounce(a, b, hit_a, hit_b, normal, hit_vel_normal, depth_end, time_ratio);
+				collision(a, b, a->hitbox.polygons + ai, b->hitbox.polygons + bi);
 		}
 	}
 }
